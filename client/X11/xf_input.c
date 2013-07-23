@@ -35,6 +35,8 @@
 #define MAX_CONTACTS 2
 
 #define PAN_THRESHOLD 50
+#define PAN_BY_PIX 10
+
 #define ZOOM_THRESHOLD 10
 
 #define MIN_FINGER_DIST 5
@@ -281,7 +283,7 @@ void xf_input_detect_pan(xfContext* xfc)
 		      PanningChangeEventArgs e;
 
 		      EventArgsInit(&e, "xfreerdp");
-		      e.XPan = 5;
+		      e.XPan = PAN_BY_PIX;
 		      e.YPan = 0;
 		      PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 	      }
@@ -299,7 +301,7 @@ void xf_input_detect_pan(xfContext* xfc)
 		      PanningChangeEventArgs e;
 
 		      EventArgsInit(&e, "xfreerdp");
-		      e.XPan = -5;
+		      e.XPan = -PAN_BY_PIX;
 		      e.YPan = 0;
 		      PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 	      }
@@ -324,7 +326,7 @@ void xf_input_detect_pan(xfContext* xfc)
 
 		      EventArgsInit(&e, "xfreerdp");
 		      e.XPan = 0;
-		      e.YPan = 5;
+		      e.YPan = PAN_BY_PIX;
 		      PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 	      }
 
@@ -342,7 +344,7 @@ void xf_input_detect_pan(xfContext* xfc)
 
 		      EventArgsInit(&e, "xfreerdp");
 		      e.XPan = 0;
-		      e.YPan = -5;
+		      e.YPan = -PAN_BY_PIX;
 		      PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 	      }
 
