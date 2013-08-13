@@ -69,7 +69,9 @@
 	switch (section)
 	{
 		case SECTION_ADVANCED_SETTINGS: // advanced settings
-			return 9;
+			//return 9;
+			//verde
+			return 8;
 		default:
 			break;
 	}
@@ -116,14 +118,15 @@
                 case 4:	// 3G performance settings
                     cellType = TableCellIdentifierSubEditor;
                     break;
-                case 5: // security mode
+			    //verde
+/*                case 5: // security mode
                     cellType = TableCellIdentifierSelection;
-                    break;
-                case 6:	// remote program
-                case 7:	// work dir
+                    break;*/
+                case 5:	// remote program
+                case 6:	// work dir
                     cellType = TableCellIdentifierText;
                     break;
-                case 8:	// console mode
+                case 7:	// console mode
                     cellType = TableCellIdentifierYesNo;
                     break;
                 default:						
@@ -205,15 +208,18 @@
             [[editCell label] setEnabled:enable_3G_settings];
             [editCell setSelectionStyle:enable_3G_settings ? UITableViewCellSelectionStyleBlue : UITableViewCellSelectionStyleNone];
             break;
-        }			
-		case 5:
+        }
+	/*	case 5:
         {
+		//verde custom -- no security option
+		break;
             EditSelectionTableViewCell* selCell = (EditSelectionTableViewCell*)cell;
             [[selCell label] setText:NSLocalizedString(@"Security", @"'Security': Bookmark protocl security settings")];
             [[selCell selection] setText:ProtocolSecurityDescription([_params intForKey:@"security"])];
             break;
-        }                                    
-		case 6:
+        }
+	 */
+		case 5:
         {
             EditTextTableViewCell* textCell = (EditTextTableViewCell*)cell;
             [[textCell label] setText:NSLocalizedString(@"Remote Program", @"'Remote Program': Bookmark remote program settings")];
@@ -223,7 +229,7 @@
             [self adjustEditTextTableViewCell:textCell];
             break;
         }            
-		case 7:
+		case 6:
         {
             EditTextTableViewCell* textCell = (EditTextTableViewCell*)cell;
             [[textCell label] setText:NSLocalizedString(@"Working Directory", @"'Working Directory': Bookmark working directory settings")];
@@ -233,7 +239,7 @@
             [self adjustEditTextTableViewCell:textCell];
             break;
         }            
-		case 8:
+		case 7:
         {
             EditFlagTableViewCell* flagCell = (EditFlagTableViewCell*)cell;
             [[flagCell label] setText:NSLocalizedString(@"Console Mode", @"'Console Mode': Bookmark console mode settings")];
@@ -268,10 +274,12 @@
         case 4:
             if ([_params boolForKey:@"enable_3g_settings"])
                 viewCtrl = [[[PerformanceEditorController alloc] initWithConnectionParams:_params keyPath:@"settings_3g"] autorelease];
-            break;                    
+            break;
+		    //verde
+		    /*
         case 5:
             viewCtrl = [[[EditorSelectionController alloc] initWithConnectionParams:_params entries:[NSArray arrayWithObject:@"security"] selections:[NSArray arrayWithObject:SelectionForSecuritySetting()]] autorelease];
-            break;                                    
+            break;    */                                
         default:
             break;
     }

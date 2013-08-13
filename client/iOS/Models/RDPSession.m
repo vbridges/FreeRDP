@@ -136,9 +136,23 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 	if ([_params hasValueForKey:@"height"])
 		settings->DesktopHeight = [_params intForKey:@"height"];
 	
-    // security
-    switch ([_params intForKey:@"security"]) 
-    {
+	
+	
+	
+	// security
+	switch ([_params intForKey:@"security"])
+	{
+			//verde customization -- always rdp
+			
+			settings->RdpSecurity = TRUE;
+			settings->TlsSecurity = FALSE;
+			settings->NlaSecurity = FALSE;
+			settings->ExtSecurity = FALSE;
+			settings->DisableEncryption = TRUE;
+			settings->EncryptionMethods = ENCRYPTION_METHOD_40BIT | ENCRYPTION_METHOD_128BIT | ENCRYPTION_METHOD_FIPS;
+			settings->EncryptionLevel = ENCRYPTION_LEVEL_CLIENT_COMPATIBLE;
+			break;
+	/*
         case TSXProtocolSecurityNLA:
             settings->RdpSecurity = FALSE;
             settings->TlsSecurity = FALSE;
@@ -165,6 +179,8 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 
         default:
             break;
+	 
+	 */
     }
     
     // ts gateway settings
