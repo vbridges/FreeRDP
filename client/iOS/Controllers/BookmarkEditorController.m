@@ -90,7 +90,7 @@
 	switch (section)
 	{
 		case SECTION_SERVER: // server settings
-			return (_display_server_settings ? 3 : 0);
+			return (_display_server_settings ? 2 : 0);
 		case SECTION_CREDENTIALS: // credentials
 			return 1;
 		case SECTION_SETTINGS: // session settings
@@ -202,11 +202,11 @@
 			[[textCell textfield] setText:[_params StringForKey:@"hostname"]];
             [[textCell textfield] setPlaceholder:NSLocalizedString(@"not set", @"not set placeholder")];
 			break;
-		case 2:
+		/*case 2:
 			[[textCell label] setText:NSLocalizedString(@"Port", @"'Port': Bookmark port")];
 			[[textCell textfield] setText:[NSString stringWithFormat:@"%d", [_params intForKey:@"port"]]];
             [[textCell textfield] setKeyboardType:UIKeyboardTypeNumberPad];
-			break;
+			break;*/
 		default:
 			NSLog(@"Invalid row index in settings table!");
 			break;
