@@ -91,6 +91,7 @@ COMMAND_LINE_ARGUMENT_A args[] =
 	{ "usb", COMMAND_LINE_VALUE_REQUIRED, NULL, NULL, NULL, -1, NULL, "Redirect USB device" },
 	{ "multitouch", COMMAND_LINE_VALUE_BOOL, NULL, BoolValueFalse, NULL, -1, NULL, "Redirect multitouch input" },
 	{ "gestures", COMMAND_LINE_VALUE_BOOL, NULL, BoolValueFalse, NULL, -1, NULL, "Consume multitouch input locally" },
+	{ "pan-px", COMMAND_LINE_VALUE_OPTIONAL, NULL, "10", NULL, -1, NULL, "Number of pixels to pan by" },
 	{ "echo", COMMAND_LINE_VALUE_FLAG, NULL, NULL, NULL, -1, "echo", "Echo channel" },
 	{ "disp", COMMAND_LINE_VALUE_FLAG, NULL, NULL, NULL, -1, NULL, "Display control" },
 	{ "fonts", COMMAND_LINE_VALUE_BOOL, NULL, BoolValueFalse, NULL, -1, NULL, "Smooth fonts (ClearType)" },
@@ -601,8 +602,26 @@ int freerdp_client_command_line_post_filter(void* context, COMMAND_LINE_ARGUMENT
 	}
 	CommandLineSwitchCase(arg, "gestures")
 	{
-		printf("gestures\n");
-		settings->MultiTouchGestures = TRUE;
+	  settings->MultiTouchGestures = TRUE;
+	}
+	CommandLineSwitchCase(arg, "pan-px")
+	{
+	  char** p;
+	  int count;
+	  int px;
+
+	  p = freerdp_command_line_parse_comma_separated_values_offset(arg->Value, &count);
+
+	  if(count == 2)
+	    {
+	      sscanf(p[1], "%d", &px);
+	      //printf("PanByPix = %d\npx = [%d]\n", settings->PanByPix, px);
+
+	      
+	      settings->PanByPix = px;
+	    }
+
+	  free(p);
 	}
 	CommandLineSwitchCase(arg, "echo")
 	{

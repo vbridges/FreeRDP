@@ -1224,6 +1224,10 @@ int freerdp_get_param_int(rdpSettings* settings, int id)
 			return settings->YPan;
 			break;
 
+	case FreeRDP_PanByPix:
+	  return settings->PanByPix;
+	  break;
+
 		default:
 			return 0;
 			break;

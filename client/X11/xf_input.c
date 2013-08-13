@@ -35,7 +35,7 @@
 #define MAX_CONTACTS 2
 
 #define PAN_THRESHOLD 50
-#define PAN_BY_PIX 10
+//#define PAN_BY_PIX 10
 
 #define ZOOM_THRESHOLD 10
 
@@ -66,6 +66,8 @@ double py_vector;
 
 int xinput_opcode;
 int scale_cnt;
+
+int pan_by_pix;
 
 const char* xf_input_get_class_string(int class)
 {
@@ -105,6 +107,12 @@ int xf_input_init(xfContext* xfc, Window window)
 	ndevices = 0;
 	active_contacts = 0;
 	ZeroMemory(contacts, sizeof(touchContact) * MAX_CONTACTS);
+
+	pan_by_pix = xfc->settings->PanByPix;
+	if(pan_by_pix == 0)
+	  {
+	    pan_by_pix = 10;
+	  }
 	
 	if (!XQueryExtension(xfc->display, "XInputExtension", &opcode, &event, &error))
 	{
@@ -276,7 +284,7 @@ void xf_input_detect_pan(xfContext* xfc)
 				PanningChangeEventArgs e;
 				
 				EventArgsInit(&e, "xfreerdp");
-				e.XPan = 5;
+				e.XPan = pan_by_pix;
 				e.YPan = 0;
 				PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
@@ -293,7 +301,7 @@ void xf_input_detect_pan(xfContext* xfc)
 				PanningChangeEventArgs e;
 				
 				EventArgsInit(&e, "xfreerdp");
-				e.XPan = -5;
+				e.XPan = -pan_by_pix;
 				e.YPan = 0;
 				PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
@@ -317,7 +325,7 @@ void xf_input_detect_pan(xfContext* xfc)
 				
 				EventArgsInit(&e, "xfreerdp");
 				e.XPan = 0;
-				e.YPan = 5;
+				e.YPan = pan_by_pix;
 				PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
 			
@@ -334,7 +342,7 @@ void xf_input_detect_pan(xfContext* xfc)
 				
 				EventArgsInit(&e, "xfreerdp");
 				e.XPan = 0;
-				e.YPan = -5;
+				e.YPan = -pan_by_pix;
 				PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
 			

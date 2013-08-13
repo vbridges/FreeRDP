@@ -612,6 +612,7 @@ typedef struct _RDPDR_PARALLEL RDPDR_PARALLEL;
 #define FreeRDP_XPan						1552
 #define FreeRDP_YPan						1553
 #define FreeRDP_ScalingFactor					1554
+#define FreeRDP_PanByPix                                      1555
 #define FreeRDP_SoftwareGdi					1601
 #define FreeRDP_LocalConnection					1602
 #define FreeRDP_AuthenticationOnly				1603
@@ -984,7 +985,8 @@ struct rdp_settings
 	ALIGN64 int XPan; /* 1552 */
 	ALIGN64 int YPan; /* 1553 */
 	ALIGN64 double ScalingFactor; /* 1554 */
-	UINT64 padding1600[1600 - 1555]; /* 1555 */
+  ALIGN64 int PanByPix; /* 1555 */
+	UINT64 padding1600[1600 - 1556]; /* 1556 */
 
 	/* Miscellaneous */
 	ALIGN64 BOOL SoftwareGdi; /* 1601 */
