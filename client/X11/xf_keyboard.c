@@ -299,7 +299,7 @@ BOOL xf_kbd_handle_special_keys(xfContext* xfc, KeySym keysym)
 				PanningChangeEventArgs e;
 				
 				EventArgsInit(&e, "xfreerdp");
-				e.XPan = -5;
+				e.XPan = -xfc->settings->PanByPix;
 				e.YPan = 0;
 				PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
@@ -321,7 +321,7 @@ BOOL xf_kbd_handle_special_keys(xfContext* xfc, KeySym keysym)
 				PanningChangeEventArgs e;
 				
 				EventArgsInit(&e, "xfreerdp");
-				e.XPan = 5;
+				e.XPan = xfc->settings->PanByPix;
 				e.YPan = 0;
 				PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
@@ -342,7 +342,7 @@ BOOL xf_kbd_handle_special_keys(xfContext* xfc, KeySym keysym)
 				
 				EventArgsInit(&e, "xfreerdp");
 				e.XPan = 0;
-				e.YPan = -5;
+				e.YPan = -xfc->settings->PanByPix;
 				PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
 			return TRUE;
@@ -362,7 +362,7 @@ BOOL xf_kbd_handle_special_keys(xfContext* xfc, KeySym keysym)
 				
 				EventArgsInit(&e, "xfreerdp");
 				e.XPan = 0;
-				e.YPan = 5;
+				e.YPan = xfc->settings->PanByPix;
 				PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
 			return TRUE;
