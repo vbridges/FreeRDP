@@ -117,6 +117,11 @@ BOOL nego_connect(rdpNego* nego)
 				nego->selected_protocol = PROTOCOL_RDP;
 			}
 		}
+		
+		if (nego->settings->CustomBrokerEnabled)
+		{
+			nego_custom_broker_connect(nego);
+		}
 
 		if (!nego_send_preconnection_pdu(nego))
 		{
@@ -942,7 +947,7 @@ void nego_init(rdpNego* nego)
  * @return
  */
 
-rdpNego* nego_new(struct rdp_transport * transport)
+rdpNego* nego_new(rdpTransport* transport)
 {
 	rdpNego* nego = (rdpNego*) malloc(sizeof(rdpNego));
 
@@ -950,6 +955,7 @@ rdpNego* nego_new(struct rdp_transport * transport)
 	{
 		ZeroMemory(nego, sizeof(rdpNego));
 		nego->transport = transport;
+		nego->settings = transport->settings;
 		nego_init(nego);
 	}
 
