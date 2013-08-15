@@ -1764,6 +1764,12 @@ int xfreerdp_client_new(freerdp* instance, rdpContext* context)
 	settings->OrderSupport[NEG_ELLIPSE_SC_INDEX] = FALSE;
 	settings->OrderSupport[NEG_ELLIPSE_CB_INDEX] = FALSE;
 
+
+	if(xfc->settings->PanByPix == 0)
+	  {
+		xfc->settings->PanByPix = 10;
+	  }
+
 	PubSub_SubscribeTerminate(context->pubSub, (pTerminateEventHandler) xf_TerminateEventHandler);
 	PubSub_SubscribeParamChange(context->pubSub, (pParamChangeEventHandler) xf_ParamChangeEventHandler);
 	PubSub_SubscribeScalingFactorChange(context->pubSub, (pScalingFactorChangeEventHandler) xf_ScalingFactorChangeEventHandler);

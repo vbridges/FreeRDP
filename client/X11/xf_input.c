@@ -107,12 +107,6 @@ int xf_input_init(xfContext* xfc, Window window)
 	ndevices = 0;
 	active_contacts = 0;
 	ZeroMemory(contacts, sizeof(touchContact) * MAX_CONTACTS);
-
-	pan_by_pix = xfc->settings->PanByPix;
-	if(pan_by_pix == 0)
-	  {
-	    pan_by_pix = 10;
-	  }
 	
 	if (!XQueryExtension(xfc->display, "XInputExtension", &opcode, &event, &error))
 	{
