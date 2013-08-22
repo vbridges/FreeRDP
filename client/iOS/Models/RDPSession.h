@@ -10,6 +10,8 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
+#import "VBridge.h"
+
 #include <freerdp/freerdp.h>
 
 // forward declaration
@@ -72,7 +74,7 @@ extern NSString* TSXSessionDidFailToConnectNotification;
 
 
 // initialize a new session with the given bookmark
-- (id)initWithBookmark:(ComputerBookmark*)bookmark;
+- (id)initWithBookmark:(ComputerBookmark*)bookmark andVB:(VBridge *)vb;
 
 #pragma mark - session control functions
 

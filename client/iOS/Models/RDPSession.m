@@ -43,7 +43,7 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 }
 
 // Designated initializer.
-- (id)initWithBookmark:(ComputerBookmark *)bookmark
+- (id)initWithBookmark:(ComputerBookmark *)bookmark andVB:(VBridge *)vb
 {
 	if (!(self = [super init]))
 		return nil;
@@ -59,6 +59,26 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 	_freerdp = ios_freerdp_new();
     rdpSettings* settings = _freerdp->settings;	
     _ui_request_completed = [[NSCondition alloc] init];
+	
+	//VERDE
+	
+	if (!vb)
+	{
+		NSLog(@"vbridge object nil!");
+	}
+	else
+	{
+		settings->CustomBrokerEnabled = TRUE;
+		
+		settings->VerdeBrokerHostname = strdup("verde01.aus.vbridges.com");
+		//settings->VerdeBrokerHostname = strdup([[vb upn] UTF8String]);
+		settings->VerdeBrokerPort = 48622;
+		settings->VerdeDesktopName = strdup([[vb selected_hostname] UTF8String]);
+		settings->VerdeUsername = strdup([[vb username] UTF8String]);
+		settings->VerdeSecurityTicket = strdup([[vb security_ticket] UTF8String]);
+	}
+	
+	
     
     BOOL connected_via_3g = ![bookmark conntectedViaWLAN];
     
@@ -70,12 +90,16 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 	
 	if ([_params hasValueForKey:@"port"])
 		settings->ServerPort = [_params intForKey:@"port"];
-	
+		//settings->ServerPort = 48622;
+		
 	if ([_params boolForKey:@"console"])
 		settings->ConsoleSession = 1;
 
 	// connection info	
     settings->ServerHostname = strdup([_params UTF8StringForKey:@"hostname"]);
+	
+	NSLog(@"serverport = %d, hostname = [%s]", settings->ServerPort, settings->ServerHostname);
+
 	
 	// String settings
 	if ([[_params StringForKey:@"username"] length])

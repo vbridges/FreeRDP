@@ -16,6 +16,8 @@
 #import "GlobalDefaults.h"
 #import "BlockAlertView.h"
 
+#import "VerdeDeskopListViewController.h"
+
 #define SECTION_SESSIONS    0
 #define SECTION_BOOKMARKS   1
 #define NUM_SECTIONS        2
@@ -511,13 +513,25 @@
 		}
 		
 		if(bookmark != nil)
-		{	            
+		{
+			//NSLog(@"Interception!!");
+			
+			VerdeDeskopListViewController* vdlCtl = [[[VerdeDeskopListViewController alloc] initWithBookmark:bookmark] autorelease];
+			
+			//[bookmarkEditorController setHidesBottomBarWhenPushed:YES];
+			
+			[[self navigationController] pushViewController:vdlCtl animated:YES];
+
+			
+			/*
 			// create rdp session
             RDPSession* session = [[[RDPSession alloc] initWithBookmark:bookmark] autorelease];
             UIViewController* ctrl = [[[RDPSessionViewController alloc] initWithNibName:@"RDPSessionView" bundle:nil session:session] autorelease];
             [ctrl setHidesBottomBarWhenPushed:YES];
             [[self navigationController] pushViewController:ctrl animated:YES];
             [_active_sessions addObject:session];
+			 
+			 */
         }
 	}
 }

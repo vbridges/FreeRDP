@@ -120,6 +120,8 @@ BOOL tcp_connect(rdpTcp* tcp, const char* hostname, UINT16 port)
 	UINT32 option_value;
 	socklen_t option_len;
 
+	printf("tcp_connect: host: [%s] port: %d\n", hostname, port);
+	
 	if (hostname == NULL)
 		return FALSE;
 
