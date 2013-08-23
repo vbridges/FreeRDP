@@ -28,13 +28,9 @@
 {
 	if (!bookmark)
 		[NSException raise:NSInvalidArgumentException format:@"%s: params may not be nil.", __func__];
-	
-	NSLog(@"initialized with bookmark: [%@]", bookmark.uuid);
-	
+		
 	self.bookmark = [bookmark retain];
-	
-	NSLog(@"stored as bookmark: [%@]", self.bookmark.uuid);
-	
+		
 	self.startedSession = NO;
 	
 	return self;
@@ -102,22 +98,18 @@
 			for (int i = 1; i < [parts count]; i++)
 			{
 				realm = [NSString stringWithFormat:@"%@.%@", realm, [parts objectAtIndex:i]];
-				NSLog(@"realm[%d] = [%@]", i, realm);
 			}
 			
 			//remove .prefix
 			realm = [realm substringFromIndex:1];
 		}
-		
-		NSLog(@"realm = [%@]", realm);
-		
+				
 		usrStr = [NSString stringWithFormat:@"%@@%@",
 			  [self.bookmark.params StringForKey:@"username"],
 			  realm];
 	}
 	
 	self.vb = [[VBridge alloc] initWithUsername:usrStr Password:pass URL:urlStr completionHandler:^{
-		NSLog(@"==Complete==");
 		
 		[self.tab reloadData];
 	}];
@@ -150,9 +142,7 @@
 	NSInteger num;
 	
 	num = [self.vb getNumDesktops];
-	
-	NSLog(@"table should have %d rows", num);
-	
+		
 	return num;
 }
 
@@ -172,15 +162,9 @@
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
-	NSLog(@"Selected index %d", indexPath.row);
-	
 	self.vb.selected_hostname = [[self.vb getDesktopNameByNum:indexPath.row] retain];
-	
-	NSLog(@"Corresponding server: %@", self.vb.selected_hostname);
-	
+		
 	[self.vb callWhenGotTicket:^{
-		NSLog(@"--> got ticket: [%@]", self.vb.security_ticket);
-		NSLog(@"--> bookmark [%@]", self.bookmark.uuid);
 		[self doRDP];
 	}];
 	

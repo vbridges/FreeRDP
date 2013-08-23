@@ -70,15 +70,10 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 	{
 		settings->CustomBrokerEnabled = TRUE;
 		
-		//settings->VerdeBrokerHostname = strdup("verde01.aus.vbridges.com");
 		settings->VerdeBrokerHostname = strdup([[vb simple_url] UTF8String]);
 		settings->VerdeBrokerPort = 48622;
 		settings->VerdeDesktopName = strdup([[vb selected_hostname] UTF8String]);
 		settings->VerdeUsername = strdup([[vb username] UTF8String]);
-		//settings->VerdeUsername = strdup("cclayton@aus.vbridges.com");
-		//settings->VerdeUsername = strdup("cclayton@awake");
-		//settings->VerdeUsername = strdup("cclayton");
-		//settings->VerdeUsername = strdup("cclayton@awake#org-11");
 		settings->VerdeSecurityTicket = strdup([[vb security_ticket] UTF8String]);
 		
 		if ([vb org_num] != nil)
@@ -87,7 +82,6 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 		}
 		
 		
-		NSLog(@"BROKER\n\tuser[%s] for broker.", settings->VerdeUsername);
 	}
 	
 	
@@ -108,7 +102,6 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 		settings->ConsoleSession = 1;
 
 	// connection info	
-	//settings->ServerHostname = strdup([_params UTF8StringForKey:@"hostname"]);
 	settings->ServerHostname = strdup([[vb simple_url] UTF8String]);
 	
 	NSLog(@"serverport = %d, hostname = [%s]", settings->ServerPort, settings->ServerHostname);
@@ -122,28 +115,15 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 			     [_params StringForKey:@"username"],
 			     [vb upn]];
 	settings->Username = strdup([usrname UTF8String]);
-	
-	//settings->Username = strdup([[vb username] UTF8String]);
-    
+	    
 	if ([[_params StringForKey:@"password"] length])
 		settings->Password = strdup([_params UTF8StringForKey:@"password"]);
 	
 	//if ([[_params StringForKey:@"domain"] length])
 		//settings->Domain = strdup([_params UTF8StringForKey:@"domain"]);
-	
-	//settings->Domain = strdup([[vb upn] UTF8String]);
-	//settings->Domain = strdup("awake");
-	//settings->Username = strdup("cclayton");
-	//settings->Username = strdup("cclayton@aus.vbridges.com");
     
 	settings->ShellWorkingDirectory = strdup([_params UTF8StringForKey:@"working_directory"]);
 	settings->AlternateShell = strdup([_params UTF8StringForKey:@"remote_program"]);
-	
-	NSLog(@"Settings: \n\tuser: [%s]\n\tpass: [%s]\n\tdomain: [%s]\n\thost: [%s]",
-	      settings->Username,
-	      settings->Password,
-	      settings->Domain,
-	      settings->ServerHostname);
 	
 	// RemoteFX
 	if ([_params boolForKey:@"perf_remotefx" with3GEnabled:connected_via_3g])

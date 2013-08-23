@@ -94,7 +94,7 @@ static const short _base64DecodingTable[256] = {
 	_broker_url = [u retain];
 	_completionCallback = [cb copy];
 	
-	NSLog(@"VBridge: init called with username: [%@], pass: [%@], url: [%@]", self.username, self.password, self.broker_url);
+	//NSLog(@"VBridge: init called with username: [%@], pass: [%@], url: [%@]", self.username, self.password, self.broker_url);
 	
 	_upn = nil;
 	_verde_status = nil;
@@ -103,9 +103,7 @@ static const short _base64DecodingTable[256] = {
 	NSString *id_pass = [NSString stringWithFormat:@"%@:%@", self.username, self.password];
 	NSString *b64 = [VBridge encodeBase64WithString:id_pass];
 	self.auth_header = [NSString stringWithFormat:@"Basic %@", b64];
-	
-	NSLog(@"id:pass for REST API = [%@]", id_pass);
-	
+		
 	self.names = [NSMutableArray arrayWithCapacity:64];
 	
 	_simple_url = [[_broker_url substringWithRange:NSMakeRange(8, [_broker_url length] - 9)] retain];
@@ -213,39 +211,38 @@ static const short _base64DecodingTable[256] = {
 	
 	NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
 	
-	NSLog(@"Receive Response: status=%d", [httpResponse statusCode]);
+	//NSLog(@"Receive Response: status=%d", [httpResponse statusCode]);
 	
 	NSDictionary *headers = [httpResponse allHeaderFields];
 	
 	if ([headers objectForKey:@"X-Auth-upn"] != nil)
 	{
 		self.upn = [headers objectForKey:@"X-Auth-upn"];
-		NSLog(@"Got upn! [%@]", self.upn);
+		//NSLog(@"Got upn! [%@]", self.upn);
 	}
 	
 	if ([headers objectForKey:@"X-Verde-Status"] != nil)
 	{
 		self.verde_status = [headers objectForKey:@"X-Verde-Status"];
-		NSLog(@"Got verde status! [%@]", self.verde_status);
+		//NSLog(@"Got verde status! [%@]", self.verde_status);
 	}
 	
 	if ([headers objectForKey:@"X-Org-name"] != nil)
 	{
 		self.org_name = [headers objectForKey:@"X-Org-name"];
-		NSLog(@"Got Org Name! [%@]", self.org_name);
+		//NSLog(@"Got Org Name! [%@]", self.org_name);
 	}
 	
 	if ([headers objectForKey:@"X-Org-Id"] != nil)
 	{
 		self.org_num = [headers objectForKey:@"X-Org-Id"];
-		NSLog(@"Got Org Id! [%@]", self.org_num);
+		//NSLog(@"Got Org Id! [%@]", self.org_num);
 	}
 		
 }
 
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
 {
-	NSLog(@"Receive Data");
 	/* Append data to the buffer */
 	[self.buffer appendData:data];
 }
@@ -254,7 +251,7 @@ static const short _base64DecodingTable[256] = {
 {
 	NSString *body = [[NSString alloc] initWithData:self.buffer encoding:NSUTF8StringEncoding];
 	
-	NSLog(@"String sent from server %@", body);
+	//NSLog(@"String sent from server %@", body);
 	
 	NSArray *lines = [body componentsSeparatedByString:@"\n"];
 	
@@ -264,8 +261,8 @@ static const short _base64DecodingTable[256] = {
 		//not sure if ticket is first line or the entire body
 		self.security_ticket = [lines objectAtIndex:0];
 	
-		NSLog(@"Got security ticket (valid for 60s)");
-		NSLog(@"ticket = [%@]", self.security_ticket);
+		//NSLog(@"Got security ticket (valid for 60s)");
+		//NSLog(@"ticket = [%@]", self.security_ticket);
 		
 		if (_gotTicketCallback == nil) {
 			NSLog(@"ticket callback nil");
@@ -286,7 +283,7 @@ static const short _base64DecodingTable[256] = {
 	if ( ([[fields objectAtIndex:0] isEqualToString:@"#version"] == YES) &&
 	    ([[fields objectAtIndex:1] isEqualToString:@"3"] == YES) )
 	{
-		NSLog(@"Version 3 protocol :)");
+		//NSLog(@"Version 3 protocol :)");
 	}
 	else
 	{
@@ -311,12 +308,12 @@ static const short _base64DecodingTable[256] = {
 			NSArray *os_pair = [[fields objectAtIndex:2] componentsSeparatedByString:@":"];
 			NSString *os = [os_pair objectAtIndex:1];
 			
-			NSLog(@"Got name: [%@] os: [%@]", name, os);
+			//NSLog(@"Got name: [%@] os: [%@]", name, os);
 			
 			if ([os intValue] == 1)
 			{
 				//ignore SPICE only hosts
-				NSLog(@"Ignoring SPICE only host %@", name);
+				//NSLog(@"Ignoring SPICE only host %@", name);
 				continue;
 			}
 			
@@ -348,7 +345,7 @@ static const short _base64DecodingTable[256] = {
 	{
 		// Note: this is presently only called once per server (or URL?) until you restart the app
 		
-		NSLog(@"Self signed cert: allowing");
+		//NSLog(@"Self signed cert: allowing");
 		return YES;
 		
 	}
@@ -364,7 +361,7 @@ static const short _base64DecodingTable[256] = {
 
 -(void)dealloc
 {
-	NSLog(@"dealloc VBridge");
+	//NSLog(@"dealloc VBridge");
 	
 	[super dealloc];
 }
