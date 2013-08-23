@@ -321,7 +321,7 @@ static const short _base64DecodingTable[256] = {
 			}
 			
 			/*
-			if  ([name rangeOfString:@"#"].location != NSNotFound)
+			if  o
 			{
 				NSArray *tmp_pair = [name componentsSeparatedByString:@"#"];
 				name = [tmp_pair objectAtIndex:0];

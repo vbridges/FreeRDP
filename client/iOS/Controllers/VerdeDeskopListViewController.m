@@ -53,9 +53,9 @@
 
 	NSString *urlStr = [NSString stringWithString:[self.bookmark.params StringForKey:@"hostname"]];
 	
-	NSString *usrStr = [NSString stringWithFormat:@"%@@%@",
-			    [self.bookmark.params StringForKey:@"username"],
-			    [self.bookmark.params StringForKey:@"domain"]];
+	NSString *domain = [self.bookmark.params StringForKey:@"domain"];
+	
+	NSString *usrStr;
 	
 	NSString *pass = [self.bookmark.params StringForKey:@"password"];
 	
@@ -73,6 +73,48 @@
 		urlStr = [NSString stringWithFormat:@"%@/", urlStr];
 	}
 	
+	if ([domain length] > 0)
+	{
+		usrStr = [NSString stringWithFormat:@"%@@%@",
+			  [self.bookmark.params StringForKey:@"username"],
+			  domain];
+	}
+	else
+	{
+		NSString *realm;
+		
+		//strip the https://
+		NSString *stripped = [urlStr substringWithRange:NSMakeRange(8, [urlStr length] - 9)];
+		
+		//now we should have either x.y.z.com/derp or x.y.z.com
+		
+		//if we have a / then realm is derp
+		if ([stripped rangeOfString:@"/"].length == 1)
+		{
+			NSArray *parts = [stripped componentsSeparatedByString:@"/"];
+			realm = [parts objectAtIndex:[parts count]-1];
+		}
+		else //else y.z.com
+		{
+			NSArray *parts = [stripped componentsSeparatedByString:@"."];
+			
+			realm = @"";
+			for (int i = 1; i < [parts count]; i++)
+			{
+				realm = [NSString stringWithFormat:@"%@.%@", realm, [parts objectAtIndex:i]];
+				NSLog(@"realm[%d] = [%@]", i, realm);
+			}
+			
+			//remove .prefix
+			realm = [realm substringFromIndex:1];
+		}
+		
+		NSLog(@"realm = [%@]", realm);
+		
+		usrStr = [NSString stringWithFormat:@"%@@%@",
+			  [self.bookmark.params StringForKey:@"username"],
+			  realm];
+	}
 	
 	self.vb = [[VBridge alloc] initWithUsername:usrStr Password:pass URL:urlStr completionHandler:^{
 		NSLog(@"==Complete==");
