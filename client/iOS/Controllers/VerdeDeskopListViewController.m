@@ -46,9 +46,9 @@
 	// Do any additional setup after loading the view.
 	
 	
-	NSString *old_urlStr = @"https://verde01.aus.vbridges.com/";
-	NSString *old_usrStr = @"cclayton@aus.vbridges.com";
-	NSString *old_pass = @"C0ryClayt0n##";
+	//NSString *old_urlStr = @"https://verde01.aus.vbridges.com/";
+	//NSString *old_usrStr = @"cclayton@aus.vbridges.com";
+	//NSString *old_pass = @"C0ryClayt0n##";
 	//NSString *usrStr = @"cclayton";
 
 	NSString *urlStr = [NSString stringWithString:[self.bookmark.params StringForKey:@"hostname"]];
@@ -73,11 +73,6 @@
 		urlStr = [NSString stringWithFormat:@"%@/", urlStr];
 	}
 	
-	
-	NSLog(@"old url: %@", old_urlStr);
-	NSLog(@"url: %@", urlStr);
-	NSLog(@"old usr: %@", old_usrStr);
-	NSLog(@"usr: %@", usrStr);
 	
 	self.vb = [[VBridge alloc] initWithUsername:usrStr Password:pass URL:urlStr completionHandler:^{
 		NSLog(@"==Complete==");

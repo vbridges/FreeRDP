@@ -75,7 +75,19 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 		settings->VerdeBrokerPort = 48622;
 		settings->VerdeDesktopName = strdup([[vb selected_hostname] UTF8String]);
 		settings->VerdeUsername = strdup([[vb username] UTF8String]);
+		//settings->VerdeUsername = strdup("cclayton@aus.vbridges.com");
+		//settings->VerdeUsername = strdup("cclayton@awake");
+		//settings->VerdeUsername = strdup("cclayton");
+		//settings->VerdeUsername = strdup("cclayton@awake#org-11");
 		settings->VerdeSecurityTicket = strdup([[vb security_ticket] UTF8String]);
+		
+		if ([vb org_num] != nil)
+		{
+			settings->VerdeUsername = strdup( [[NSString stringWithFormat:@"%@#%@", [vb username], [vb org_num]] UTF8String] );
+		}
+		
+		
+		NSLog(@"BROKER\n\tuser[%s] for broker.", settings->VerdeUsername);
 	}
 	
 	
@@ -103,14 +115,26 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 
 	
 	// String settings
-	if ([[_params StringForKey:@"username"] length])
-		settings->Username = strdup([_params UTF8StringForKey:@"username"]);
+	//if ([[_params StringForKey:@"username"] length])
+		//settings->Username = strdup([_params UTF8StringForKey:@"username"]);
+	
+	NSString *usrname = [NSString stringWithFormat:@"%@@%@",
+			     [_params StringForKey:@"username"],
+			     [vb upn]];
+	settings->Username = strdup([usrname UTF8String]);
+	
+	//settings->Username = strdup([[vb username] UTF8String]);
     
 	if ([[_params StringForKey:@"password"] length])
 		settings->Password = strdup([_params UTF8StringForKey:@"password"]);
 	
-	if ([[_params StringForKey:@"domain"] length])
-		settings->Domain = strdup([_params UTF8StringForKey:@"domain"]);
+	//if ([[_params StringForKey:@"domain"] length])
+		//settings->Domain = strdup([_params UTF8StringForKey:@"domain"]);
+	
+	//settings->Domain = strdup([[vb upn] UTF8String]);
+	//settings->Domain = strdup("awake");
+	//settings->Username = strdup("cclayton");
+	//settings->Username = strdup("cclayton@aus.vbridges.com");
     
 	settings->ShellWorkingDirectory = strdup([_params UTF8StringForKey:@"working_directory"]);
 	settings->AlternateShell = strdup([_params UTF8StringForKey:@"remote_program"]);

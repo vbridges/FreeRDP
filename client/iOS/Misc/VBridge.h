@@ -25,6 +25,8 @@
 
 @property (copy) NSString *upn;
 @property (copy) NSString *verde_status;
+@property (copy) NSString *org_name;
+@property (copy) NSString *org_num;
 
 @property (copy) NSString *security_ticket;
 @property (copy) NSString *selected_hostname;

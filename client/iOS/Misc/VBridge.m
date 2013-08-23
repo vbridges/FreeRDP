@@ -104,6 +104,8 @@ static const short _base64DecodingTable[256] = {
 	NSString *b64 = [VBridge encodeBase64WithString:id_pass];
 	self.auth_header = [NSString stringWithFormat:@"Basic %@", b64];
 	
+	NSLog(@"id:pass for REST API = [%@]", id_pass);
+	
 	self.names = [NSMutableArray arrayWithCapacity:64];
 	
 	_simple_url = [[_broker_url substringWithRange:NSMakeRange(8, [_broker_url length] - 9)] retain];
@@ -114,24 +116,14 @@ static const short _base64DecodingTable[256] = {
 		_simple_url = [[_simple_url substringWithRange:NSMakeRange(0, range.location)] retain];
 	}
 	
-	NSLog(@"simple url = [%@]", _simple_url);
-	
 	return self;
 }
 
 
 -(void)getDesktops
 {
-	NSString *old_auth_header = @"Basic Y2NsYXl0b25AYXVzLnZicmlkZ2VzLmNvbTpDMHJ5Q2xheXQwbiMj";
-	
 	NSString *fullURL = [NSString stringWithFormat:@"%@_mpcdesktops?version=v3", _broker_url];
-	
-	//self.auth_header = old_auth_header;
-	
-	NSLog(@"old_auth: %@", old_auth_header);
-	//NSLog(@"auth: %@", self.auth_header);
-	
-	
+		
 	/* create the request */
 	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:fullURL]];
 	
@@ -155,20 +147,14 @@ static const short _base64DecodingTable[256] = {
 		NSLog(@"Connection Failed");
 	}
 	
-	NSLog(@"getdesktops return -- url -> [%@] [%p]", _broker_url, _broker_url);
 }
 
 -(void)startDesktopByNum:(NSUInteger)dnum
 {
-	NSLog(@"sdbn(%d)", dnum);
-	NSLog(@"starting desktop [%@]", [self.names objectAtIndex:dnum]);
-	NSLog(@"url = %@", _broker_url);
-	//NSString *old_auth_header = @"Basic Y2NsYXl0b25AYXVzLnZicmlkZ2VzLmNvbTpDMHJ5Q2xheXQwbiMj";
+	//NSLog(@"starting desktop [%@]", [self.names objectAtIndex:dnum]);
 	
 	NSString *fullURL = [NSString stringWithFormat:@"%@_mpcstart?image=%@&protocol=0", _broker_url, [self.names objectAtIndex:dnum]];
-	
-	NSLog(@"fullURL = [%@]", fullURL);
-	
+		
 	/* create the request */
 	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:fullURL]];
 	
@@ -222,8 +208,6 @@ static const short _base64DecodingTable[256] = {
 
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
 {
-	NSLog(@"response 1-- url -> [%@] [%p]", _broker_url, _broker_url);
-	
 	/* reset the buffer length each time this is called */
 	[self.buffer setLength:0];
 	
@@ -245,8 +229,18 @@ static const short _base64DecodingTable[256] = {
 		NSLog(@"Got verde status! [%@]", self.verde_status);
 	}
 	
-	NSLog(@"response 2-- url -> [%@] [%p]", _broker_url, _broker_url);
+	if ([headers objectForKey:@"X-Org-name"] != nil)
+	{
+		self.org_name = [headers objectForKey:@"X-Org-name"];
+		NSLog(@"Got Org Name! [%@]", self.org_name);
+	}
 	
+	if ([headers objectForKey:@"X-Org-Id"] != nil)
+	{
+		self.org_num = [headers objectForKey:@"X-Org-Id"];
+		NSLog(@"Got Org Id! [%@]", self.org_num);
+	}
+		
 }
 
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
@@ -258,9 +252,6 @@ static const short _base64DecodingTable[256] = {
 
 - (void)connectionDidFinishLoading:(NSURLConnection *)connection
 {
-	NSLog(@"Connection Finished Loading");
-	NSLog(@"loaded -- url -> [%@]", _broker_url);
-	
 	NSString *body = [[NSString alloc] initWithData:self.buffer encoding:NSUTF8StringEncoding];
 	
 	NSLog(@"String sent from server %@", body);
@@ -286,20 +277,6 @@ static const short _base64DecodingTable[256] = {
 		
 		return;
 	}
-	
-	/////
-	// testing
-	/////
-	/*
-	NSString *testBody = [NSString stringWithFormat:@"%@\n%@\n%@\n%@\n",
-			      @"#version:3",
-			      @"name:CORP-WIN732|title:CORP-WIN732|os:0|modes:7000|updated:1374930198|modem:3|dsl:3|broadband:3|lan:3|usb:0 0 0 0|printing_enable:true|clipboard:true|has_vdagent:true",
-			      @"name:FAKE-WIN864|title:CORP-WIN732|os:0|modes:7000|updated:1374930198|modem:3|dsl:3|broadband:3|lan:3|usb:0 0 0 0|printing_enable:true|clipboard:true|has_vdagent:true",
-			      @"name:DERP-WINNT4|title:CORP-WIN732|os:0|modes:7000|updated:1374930198|modem:3|dsl:3|broadband:3|lan:3|usb:0 0 0 0|printing_enable:true|clipboard:true|has_vdagent:true"];
-	
-	NSArray *lines = [testBody componentsSeparatedByString:@"\n"];
-	*/
-	//end test
 	
 	
 	NSString *firstLine = [lines objectAtIndex:0];
@@ -343,34 +320,17 @@ static const short _base64DecodingTable[256] = {
 				continue;
 			}
 			
+			/*
+			if  ([name rangeOfString:@"#"].location != NSNotFound)
+			{
+				NSArray *tmp_pair = [name componentsSeparatedByString:@"#"];
+				name = [tmp_pair objectAtIndex:0];
+			}
+			*/
 			[self.names addObject:name];
 		}
 	}
-	/*
-	NSString *secondLine = [lines objectAtIndex:1];
-	
-	fields = [secondLine componentsSeparatedByString:@"|"];
-	
-	NSArray *pair = [[fields objectAtIndex:0] componentsSeparatedByString:@":"];
-	
-	if ([[pair objectAtIndex:0] isEqualToString:@"name"] == YES)
-	{
-		NSString *name = [pair objectAtIndex:1];
 		
-		NSLog(@"Got name: [%@]", name);
-		[self.names addObject:name];
-	}
-	 */
-	
-	/*
-	 for (NSString *part in lines)
-	 {
-	 NSLog(@"-> [%@]", part);
-	 }
-	 */
-	
-	NSLog(@"finished -- url -> [%@]", _broker_url);
-	
 	if (_completionCallback == nil) {
 		NSLog(@"nil callback not being called.");
 	}
@@ -384,8 +344,6 @@ static const short _base64DecodingTable[256] = {
 
 -(BOOL)connection:(NSURLConnection *)connection canAuthenticateAgainstProtectionSpace:(NSURLProtectionSpace *)space
 {
-	NSLog(@"auth -- url -> [%@] [%p]", _broker_url, _broker_url);
-	
 	if( [[space authenticationMethod] isEqualToString:NSURLAuthenticationMethodServerTrust] )
 	{
 		// Note: this is presently only called once per server (or URL?) until you restart the app

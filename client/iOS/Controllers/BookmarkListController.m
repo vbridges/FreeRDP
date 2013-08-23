@@ -829,7 +829,7 @@
     if(_manual_bookmarks == nil)
     {
         _manual_bookmarks = [[NSMutableArray alloc] init];
-        [_manual_bookmarks addObject:[[[GlobalDefaults sharedGlobalDefaults] newTestServerBookmark] autorelease]];
+        //[_manual_bookmarks addObject:[[[GlobalDefaults sharedGlobalDefaults] newTestServerBookmark] autorelease]];
     }
 }
 
