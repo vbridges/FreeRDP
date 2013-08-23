@@ -12,7 +12,7 @@
 
 @property (copy) NSString *username;
 @property (copy) NSString *password;
-//@property (copy) NSString *fake_url;
+@property (copy) NSString *simple_url;
 @property (copy) NSString *broker_url;
 
 @property (copy) NSString *auth_header;

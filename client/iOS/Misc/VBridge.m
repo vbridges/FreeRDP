@@ -92,7 +92,6 @@ static const short _base64DecodingTable[256] = {
 	_username = [user retain];
 	_password = [pass retain];
 	_broker_url = [u retain];
-	//_fake_url = [NSString stringWithString:u];
 	_completionCallback = [cb copy];
 	
 	NSLog(@"VBridge: init called with username: [%@], pass: [%@], url: [%@]", self.username, self.password, self.broker_url);
@@ -107,7 +106,15 @@ static const short _base64DecodingTable[256] = {
 	
 	self.names = [NSMutableArray arrayWithCapacity:64];
 	
-	NSLog(@"names initialized with %d elements", [self.names count]);
+	_simple_url = [[_broker_url substringWithRange:NSMakeRange(8, [_broker_url length] - 9)] retain];
+	
+	NSRange range = [_simple_url rangeOfString:@"/"];
+	
+	if ( range.location != NSNotFound ) {
+		_simple_url = [[_simple_url substringWithRange:NSMakeRange(0, range.location)] retain];
+	}
+	
+	NSLog(@"simple url = [%@]", _simple_url);
 	
 	return self;
 }

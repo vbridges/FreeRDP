@@ -70,8 +70,8 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 	{
 		settings->CustomBrokerEnabled = TRUE;
 		
-		settings->VerdeBrokerHostname = strdup("verde01.aus.vbridges.com");
-		//settings->VerdeBrokerHostname = strdup([[vb upn] UTF8String]);
+		//settings->VerdeBrokerHostname = strdup("verde01.aus.vbridges.com");
+		settings->VerdeBrokerHostname = strdup([[vb simple_url] UTF8String]);
 		settings->VerdeBrokerPort = 48622;
 		settings->VerdeDesktopName = strdup([[vb selected_hostname] UTF8String]);
 		settings->VerdeUsername = strdup([[vb username] UTF8String]);
@@ -96,7 +96,8 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 		settings->ConsoleSession = 1;
 
 	// connection info	
-    settings->ServerHostname = strdup([_params UTF8StringForKey:@"hostname"]);
+	//settings->ServerHostname = strdup([_params UTF8StringForKey:@"hostname"]);
+	settings->ServerHostname = strdup([[vb simple_url] UTF8String]);
 	
 	NSLog(@"serverport = %d, hostname = [%s]", settings->ServerPort, settings->ServerHostname);
 
@@ -114,6 +115,11 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 	settings->ShellWorkingDirectory = strdup([_params UTF8StringForKey:@"working_directory"]);
 	settings->AlternateShell = strdup([_params UTF8StringForKey:@"remote_program"]);
 	
+	NSLog(@"Settings: \n\tuser: [%s]\n\tpass: [%s]\n\tdomain: [%s]\n\thost: [%s]",
+	      settings->Username,
+	      settings->Password,
+	      settings->Domain,
+	      settings->ServerHostname);
 	
 	// RemoteFX
 	if ([_params boolForKey:@"perf_remotefx" with3GEnabled:connected_via_3g])
