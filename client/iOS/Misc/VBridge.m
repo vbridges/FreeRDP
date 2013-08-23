@@ -89,9 +89,9 @@ static const short _base64DecodingTable[256] = {
 -(id)initWithUsername:(NSString *)user Password:(NSString *)pass URL:(NSString *)u completionHandler:(void (^)())cb
 {
 	
-	_username = user;
-	_password = pass;
-	_broker_url = u;
+	_username = [user retain];
+	_password = [pass retain];
+	_broker_url = [u retain];
 	//_fake_url = [NSString stringWithString:u];
 	_completionCallback = [cb copy];
 	
@@ -129,6 +129,7 @@ static const short _base64DecodingTable[256] = {
 	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:fullURL]];
 	
 	[request addValue:self.auth_header forHTTPHeaderField:@"Authorization"];
+	[request retain];
 	
 	/* create the connection */
 	self.connection = [NSURLConnection connectionWithRequest:request delegate:self];
@@ -137,7 +138,7 @@ static const short _base64DecodingTable[256] = {
 	if (self.connection)
 	{
 		/* initialize the buffer */
-		self.buffer = [[NSMutableData data] retain];
+		self.buffer = [NSMutableData data];
 		
 		/* start the request */
 		[self.connection start];
@@ -155,7 +156,7 @@ static const short _base64DecodingTable[256] = {
 	NSLog(@"sdbn(%d)", dnum);
 	NSLog(@"starting desktop [%@]", [self.names objectAtIndex:dnum]);
 	NSLog(@"url = %@", _broker_url);
-	NSString *old_auth_header = @"Basic Y2NsYXl0b25AYXVzLnZicmlkZ2VzLmNvbTpDMHJ5Q2xheXQwbiMj";
+	//NSString *old_auth_header = @"Basic Y2NsYXl0b25AYXVzLnZicmlkZ2VzLmNvbTpDMHJ5Q2xheXQwbiMj";
 	
 	NSString *fullURL = [NSString stringWithFormat:@"%@_mpcstart?image=%@&protocol=0", _broker_url, [self.names objectAtIndex:dnum]];
 	
@@ -268,7 +269,13 @@ static const short _base64DecodingTable[256] = {
 		NSLog(@"Got security ticket (valid for 60s)");
 		NSLog(@"ticket = [%@]", self.security_ticket);
 		
-		//_gotTicketCallback();
+		if (_gotTicketCallback == nil) {
+			NSLog(@"ticket callback nil");
+		}
+		else
+		{
+			_gotTicketCallback();
+		}
 		
 		return;
 	}
@@ -357,7 +364,14 @@ static const short _base64DecodingTable[256] = {
 	
 	NSLog(@"finished -- url -> [%@]", _broker_url);
 	
-	_completionCallback();
+	if (_completionCallback == nil) {
+		NSLog(@"nil callback not being called.");
+	}
+	else
+	{
+		_completionCallback();
+	}
+	
 }
 
 

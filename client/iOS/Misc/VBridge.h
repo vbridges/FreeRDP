@@ -20,7 +20,7 @@
 @property (nonatomic, strong) NSMutableArray *names;
 
 
-@property (nonatomic, assign) NSMutableData   *buffer;
+@property (nonatomic, strong) NSMutableData   *buffer;
 @property (nonatomic, strong) NSURLConnection *connection;
 
 @property (copy) NSString *upn;
@@ -29,9 +29,9 @@
 @property (copy) NSString *security_ticket;
 @property (copy) NSString *selected_hostname;
 
-@property (readwrite) void (^completionCallback)();
+@property (nonatomic, copy) void (^completionCallback)();
 
-@property (readwrite) void (^gotTicketCallback)();
+@property (nonatomic, copy) void (^gotTicketCallback)();
 
 
 + (NSString *)encodeBase64WithString:(NSString *)strData;

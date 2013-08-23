@@ -79,7 +79,7 @@
 	NSLog(@"old usr: %@", old_usrStr);
 	NSLog(@"usr: %@", usrStr);
 	
-	self.vb = [[VBridge alloc] initWithUsername:usrStr Password:old_pass URL:urlStr completionHandler:^{
+	self.vb = [[VBridge alloc] initWithUsername:usrStr Password:pass URL:urlStr completionHandler:^{
 		NSLog(@"==Complete==");
 		
 		[self.tab reloadData];
@@ -137,7 +137,7 @@
 {
 	NSLog(@"Selected index %d", indexPath.row);
 	
-	self.vb.selected_hostname = [self.vb getDesktopNameByNum:indexPath.row];
+	self.vb.selected_hostname = [[self.vb getDesktopNameByNum:indexPath.row] retain];
 	
 	NSLog(@"Corresponding server: %@", self.vb.selected_hostname);
 	
