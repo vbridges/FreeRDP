@@ -19,9 +19,13 @@
 @property (nonatomic, readwrite, strong) ComputerBookmark *bookmark;
 
 @property (readwrite) BOOL startedSession;
+@property (readwrite) BOOL hasAppeared;
+@property (readwrite) BOOL hasBeenDismissed;
 
 - (id)initWithBookmark:(ComputerBookmark *)bookmark;
 
 - (void)doRDP;
+
+- (void)dismiss;
 
 @end

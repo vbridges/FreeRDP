@@ -32,8 +32,8 @@
 @property (copy) NSString *selected_hostname;
 
 @property (nonatomic, copy) void (^completionCallback)();
-
 @property (nonatomic, copy) void (^gotTicketCallback)();
+@property (nonatomic, copy) void (^connectionFailedCallback)();
 
 
 + (NSString *)encodeBase64WithString:(NSString *)strData;
@@ -50,5 +50,6 @@
 -(NSString *)getDesktopNameByNum:(NSUInteger)dnum;
 
 -(void)callWhenGotTicket:(void (^)())cb;
+-(void)setConnectionFailedCallback:(void (^)())cb;
 
 @end

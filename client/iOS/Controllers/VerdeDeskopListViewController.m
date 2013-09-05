@@ -111,7 +111,16 @@
 	
 	self.vb = [[VBridge alloc] initWithUsername:usrStr Password:pass URL:urlStr completionHandler:^{
 		
+		if ([self.vb getNumDesktops] == 0) {
+			//[[self navigationController] popViewControllerAnimated:NO];
+		}
+		
 		[self.tab reloadData];
+	}];
+	
+	[self.vb setConnectionFailedCallback:^{
+	
+		[self dismiss];
 	}];
 	
 	[self.vb getDesktops];
@@ -126,6 +135,15 @@
 	{
 		self.startedSession = NO;
 		[[self navigationController] popViewControllerAnimated:NO];
+	}
+}
+
+- (void)viewDidAppear:(BOOL)animated
+{
+	_hasAppeared = YES;
+	
+	if (_hasBeenDismissed == YES) {
+		[self dismiss];
 	}
 }
 
@@ -193,6 +211,16 @@
 	//[[self navigationController] popViewControllerAnimated:NO];
 	[[self navigationController] pushViewController:ctrl animated:YES];
 	//[_active_sessions addObject:session];
+}
+
+- (void)dismiss
+{
+	if (_hasAppeared == NO) {
+		_hasBeenDismissed = YES;
+		return;
+	}
+	
+	[[self navigationController] popViewControllerAnimated:NO];
 }
 
 @end

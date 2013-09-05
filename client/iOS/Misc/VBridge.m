@@ -202,6 +202,8 @@ static const short _base64DecodingTable[256] = {
 	NSLog(@"Connection failed! Error - %@ %@",
 	      [error localizedDescription],
 	      [[error userInfo] objectForKey:NSURLErrorFailingURLStringErrorKey]);
+	
+	_connectionFailedCallback();
 }
 
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
@@ -357,6 +359,11 @@ static const short _base64DecodingTable[256] = {
 -(void)callWhenGotTicket:(void (^)())cb
 {
 	_gotTicketCallback = [cb copy];
+}
+
+-(void)setConnectionFailedCallback:(void (^)())cb
+{
+	_connectionFailedCallback = [cb copy];
 }
 
 -(void)dealloc
