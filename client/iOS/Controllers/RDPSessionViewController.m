@@ -293,11 +293,12 @@
 
 - (void)session:(RDPSession*)session didFailToConnect:(int)reason
 {
+	NSLog(@"didFailToConnect: %d", reason);
     // remove and release connecting view
     [_connecting_indicator_view stopAnimating];
     [_connecting_view removeFromSuperview];
-    [_connecting_view autorelease];          
-
+    [_connecting_view autorelease];
+	
     // return to bookmark list
     [[self navigationController] popViewControllerAnimated:YES];
 }

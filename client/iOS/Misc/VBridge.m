@@ -121,9 +121,19 @@ static const short _base64DecodingTable[256] = {
 -(void)getDesktops
 {
 	NSString *fullURL = [NSString stringWithFormat:@"%@_mpcdesktops?version=v3", _broker_url];
-		
+	
+	//NSLog(@"full url [%@]", fullURL);
+	
+	NSURL *nurl = [NSURL URLWithString:fullURL];
+	/*
+	NSNumber *p = [nsurl port];
+	
+	if (p != nil) {
+		NSLog(@"---> port = %d", [p intValue]);
+	}
+	*/	
 	/* create the request */
-	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:fullURL]];
+	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:nurl];
 	
 	[request addValue:self.auth_header forHTTPHeaderField:@"Authorization"];
 	[request retain];
@@ -290,6 +300,7 @@ static const short _base64DecodingTable[256] = {
 	else
 	{
 		NSLog(@"Unsupported protocol version!");
+		NSLog(@"body = [%@]\n\n", body);
 	}
 	
 	//now we want the names

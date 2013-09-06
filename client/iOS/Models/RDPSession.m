@@ -68,6 +68,7 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 	}
 	else
 	{
+		settings->IgnoreCertificate = TRUE;
 		settings->CustomBrokerEnabled = TRUE;
 		
 		settings->VerdeBrokerHostname = strdup([[vb simple_url] UTF8String]);

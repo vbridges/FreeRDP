@@ -55,7 +55,7 @@
 	
 	NSString *pass = [self.bookmark.params StringForKey:@"password"];
 	
-	
+	//first handle the protocol
 	if (
 	    ( [urlStr hasPrefix:@"http"] == NO ) &&
 	    ( [urlStr hasPrefix:@"https"] == NO ) )
@@ -78,9 +78,52 @@
 	else
 	{
 		NSString *realm;
+		NSString *stripped;
+		//strip the https:// or http://
+		if ([urlStr hasPrefix:@"https"] == YES)
+		{
+			stripped = [urlStr substringWithRange:NSMakeRange(8, [urlStr length] - 9)];
+		}
+		else
+		{
+			stripped = [urlStr substringWithRange:NSMakeRange(7, [urlStr length] - 8)];
+		}
 		
-		//strip the https://
-		NSString *stripped = [urlStr substringWithRange:NSMakeRange(8, [urlStr length] - 9)];
+		//we may have a port to handle...
+		if ( [stripped rangeOfString:@":" ].length == 1 )
+		{
+			NSInteger url_port;
+			NSString *before_port;
+			NSString *after_port;
+			
+			
+			//NSLog(@"Have a port...");
+			
+			NSArray *components = [stripped componentsSeparatedByString:@":"];
+			
+			before_port = [components objectAtIndex:0];
+			NSString *remaining = [components objectAtIndex:1];
+			
+			//do we have something like 1234/org
+			NSArray *remainingComponents = [remaining componentsSeparatedByString:@"/"];
+			
+			
+			if ( [remainingComponents count] > 1)
+			{
+				url_port = [[remainingComponents objectAtIndex:0] integerValue];
+				
+				after_port = [remainingComponents objectAtIndex:1];
+			}
+			{
+				after_port = @"";
+				url_port = [[remainingComponents objectAtIndex:0] integerValue];
+			}
+			
+			NSString *crafted = [NSString stringWithFormat:@"%@%@", before_port, after_port];
+			
+			//NSLog(@"url: [%@]\nport: [%d]", crafted, url_port);
+						
+		}
 		
 		//now we should have either x.y.z.com/derp or x.y.z.com
 		
