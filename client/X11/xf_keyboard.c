@@ -246,7 +246,7 @@ BOOL xf_kbd_handle_special_keys(xfContext* xfc, KeySym keysym)
 				e.height = (int) xfc->originalHeight * xfc->settings->ScalingFactor;
 				PubSub_OnResizeWindow(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
-			xf_draw_screen_scaled(xfc, 0, 0, 0, 0, FALSE);
+			xf_draw_transformed_region(xfc, 0, 0, 0, 0, FALSE);
 			return TRUE;
 		}
 	}
@@ -281,7 +281,7 @@ BOOL xf_kbd_handle_special_keys(xfContext* xfc, KeySym keysym)
 				PubSub_OnResizeWindow(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
 			
-			xf_draw_screen_scaled(xfc, 0, 0, 0, 0, FALSE);
+			xf_draw_transformed_region(xfc, 0, 0, 0, 0, FALSE);
 			return TRUE;
 		}
 	}

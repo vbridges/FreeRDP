@@ -99,7 +99,7 @@ static BOOL xf_event_Expose(xfContext* xfc, XEvent* event, BOOL app)
 	{
 		if ((xfc->settings->ScalingFactor != 1.0) || (xfc->offset_x) || (xfc->offset_y))
 		{
-			xf_draw_screen_scaled(xfc, x - xfc->offset_x,
+			xf_draw_transformed_region(xfc, x - xfc->offset_x,
 					      y - xfc->offset_y, w, h, FALSE);
 		} else
 		{
@@ -566,7 +566,7 @@ static BOOL xf_event_ConfigureNotify(xfContext* xfc, XEvent* event, BOOL app)
 		xfc->currentWidth = event->xconfigure.width;
 		xfc->currentHeight = event->xconfigure.width;
 
-		xf_draw_screen_scaled(xfc);
+		xf_draw_transformed_region(xfc);
 	}
 */
         window = window_list_get_by_extra_id(rail->list, (void*) event->xconfigure.window);
