@@ -163,6 +163,9 @@ void xf_transform_window(xfContext* xfc)
  *bitmaps can be drawn with an applied tranformation
  *such as scaling or translation. This function is
  *used similarly to XCopyArea
+ *
+ * If w or h are 0, the entire screen will be
+ *drawn (slow).
  */
 void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL scale)
 {
@@ -174,11 +177,13 @@ void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL
 	XRenderPictFormat* picFormat;
 	XRectangle xr;
 
+	//set up the pictures
 	picFormat = XRenderFindStandardFormat(xfc->display, PictStandardRGB24);
 	pa.subwindow_mode = IncludeInferiors;
 	primaryPicture = XRenderCreatePicture(xfc->display, xfc->primary, picFormat, CPSubwindowMode, &pa);
 	windowPicture = XRenderCreatePicture(xfc->display, xfc->window->handle, picFormat, CPSubwindowMode, &pa);
 
+	//set up the transformation matrix for scaling
 	transform.matrix[0][0] = XDoubleToFixed(1);
 	transform.matrix[0][1] = XDoubleToFixed(0);
 	transform.matrix[0][2] = XDoubleToFixed(0);
@@ -191,6 +196,12 @@ void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL
 	transform.matrix[2][1] = XDoubleToFixed(0);
 	transform.matrix[2][2] = XDoubleToFixed(xfc->settings->ScalingFactor);
 
+	/*
+	 * if we have a width and height for the region
+	 *then we set the clipping rectangle. Otherwise
+	 *without a clipping rectangle, the entire
+	 *primaryPicture will be drawn.
+	 */
 	if( (w != 0) && (h != 0) )
 	{
 
@@ -198,8 +209,8 @@ void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL
 		{
 			xr.x = x * xfc->settings->ScalingFactor;
 			xr.y = y * xfc->settings->ScalingFactor;
-			xr.width = (w+1) * xfc->settings->ScalingFactor;
-			xr.height = (h+1) * xfc->settings->ScalingFactor;
+			xr.width = w * xfc->settings->ScalingFactor + 1;
+			xr.height = h * xfc->settings->ScalingFactor + 1;
 		}
 		else
 		{
@@ -209,6 +220,21 @@ void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL
 			xr.height = h;
 		}
 		XRenderSetPictureClipRectangles(xfc->display, primaryPicture, 0, 0, &xr, 1);
+	}
+
+	switch(xfc->settings->RenderQuality)
+	{
+	case 0:
+		XRenderSetPictureFilter(xfc->display, primaryPicture, "fast", NULL, 0);
+		break;
+	case 1:
+		XRenderSetPictureFilter(xfc->display, primaryPicture, "good", NULL, 0);
+		break;
+	case 2:
+		XRenderSetPictureFilter(xfc->display, primaryPicture, "best", NULL, 0);
+		break;
+	default:
+		break;
 	}
 
 	XRenderSetPictureTransform(xfc->display, primaryPicture, &transform);
