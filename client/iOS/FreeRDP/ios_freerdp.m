@@ -13,6 +13,7 @@
 #import <freerdp/client/channels.h>
 #import <freerdp/client/cmdline.h>
 
+
 #import "ios_freerdp.h"
 #import "ios_freerdp_ui.h"
 #import "ios_freerdp_events.h"
@@ -67,6 +68,11 @@ ios_pre_connect(freerdp * instance)
     settings->FrameAcknowledge = 10;
 
     freerdp_client_load_addins(instance->context->channels, instance->settings);
+	
+	NSLog(@"preconnect~");
+	char* args[] = {"rdpsnd", "sys:ios"};
+	
+	freerdp_client_add_static_channel(instance->settings, 2, args);
 
 	freerdp_channels_pre_connect(instance->context->channels, instance);
 
@@ -85,6 +91,8 @@ static BOOL ios_post_connect(freerdp* instance)
 	instance->update->EndPaint = ios_ui_end_paint;
 	instance->update->DesktopResize = ios_ui_resize_window;
 		
+	NSLog(@"PostConnect!");
+	
 	// Channel allocation
 	freerdp_channels_post_connect(instance->context->channels, instance);
 

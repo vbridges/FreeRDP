@@ -635,6 +635,7 @@ static void rdpsnd_process_addin_args(rdpsndPlugin* rdpsnd, ADDIN_ARGV* args)
 
 static void rdpsnd_process_connect(rdpSvcPlugin* plugin)
 {
+	printf("rdpsnd_process_connect\n");
 	ADDIN_ARGV* args;
 	rdpsndPlugin* rdpsnd = (rdpsndPlugin*) plugin;
 

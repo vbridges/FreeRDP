@@ -42,6 +42,7 @@
 #cmakedefine WITH_JPEG
 #cmakedefine WITH_WIN8
 #cmakedefine WITH_RDPSND_DSOUND
+#cmakedefine WITH_IOSAUDIO
 
 /* Plugins */
 #cmakedefine STATIC_CHANNELS

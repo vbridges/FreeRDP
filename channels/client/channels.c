@@ -508,6 +508,8 @@ int freerdp_channels_post_connect(rdpChannels* channels, freerdp* instance)
 	hostnameLength = strlen(hostname);
 
 	DEBUG_CHANNELS("hostname [%s] channels->num_libs [%d]", hostname, channels->clientDataCount);
+	
+	printf("channel count: [%d]\n", channels->clientDataCount);
 
 	for (index = 0; index < channels->clientDataCount; index++)
 	{

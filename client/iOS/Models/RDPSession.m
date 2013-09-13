@@ -77,9 +77,20 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 		settings->VerdeUsername = strdup([[vb username] UTF8String]);
 		settings->VerdeSecurityTicket = strdup([[vb security_ticket] UTF8String]);
 		
-		if ([vb org_num] != nil)
+		
+		if ( [vb org_num] != nil ) //we have a string
 		{
-			settings->VerdeUsername = strdup( [[NSString stringWithFormat:@"%@#%@", [vb username], [vb org_num]] UTF8String] );
+			NSArray *orgparts = [[vb org_num] componentsSeparatedByString:@"-"];
+			
+			int iOrg = [[orgparts objectAtIndex:1] intValue];
+			//NSLog(@"int value of [%@] is [%d]", [orgparts objectAtIndex:1], iOrg);
+			
+			if (iOrg != 0) //exclude default global org
+			{
+				settings->VerdeUsername = strdup( [[NSString stringWithFormat:@"%@#%@", [vb username], [vb org_num]] UTF8String] );
+			}
+			
+			
 		}
 		
 		
@@ -104,9 +115,6 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 
 	// connection info	
 	settings->ServerHostname = strdup([[vb simple_url] UTF8String]);
-	
-	NSLog(@"serverport = %d, hostname = [%s]", settings->ServerPort, settings->ServerHostname);
-
 	
 	// String settings
 	//if ([[_params StringForKey:@"username"] length])
@@ -217,6 +225,21 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 	 
 	 */
     }
+	
+	/*TESTING ONLY*/
+	{
+		settings->CustomBrokerEnabled = FALSE;
+		
+		settings->RdpSecurity = FALSE;
+		settings->TlsSecurity = FALSE;
+		settings->NlaSecurity = TRUE;
+		settings->ExtSecurity = FALSE;
+		
+		settings->Username = strdup("corey");
+		settings->Password = strdup("gaill#95");
+		settings->ServerHostname = strdup("sakura");
+		
+	}
     
     // ts gateway settings
     if ([_params boolForKey:@"enable_tsg_settings"])
@@ -235,7 +258,7 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 	settings->KeyboardLayout = 0x409;
     
 	// Audio settings
-    settings->AudioPlayback = FALSE;
+    settings->AudioPlayback = TRUE;
     settings->AudioCapture = FALSE;
 	
 	[self mfi]->session = self;

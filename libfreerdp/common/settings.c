@@ -210,6 +210,8 @@ void freerdp_static_channel_collection_add(rdpSettings* settings, ADDIN_ARGV* ch
 		settings->StaticChannelArray = (ADDIN_ARGV**)
 				realloc(settings->StaticChannelArray, settings->StaticChannelArraySize);
 	}
+	
+	printf("adding %s to static channel array at [%d]\n", channel->argv[0], settings->StaticChannelCount);
 
 	settings->StaticChannelArray[settings->StaticChannelCount++] = channel;
 }
