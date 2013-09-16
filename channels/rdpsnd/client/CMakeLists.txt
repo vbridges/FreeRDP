@@ -43,17 +43,15 @@ if(WITH_ALSA)
 	add_channel_client_subsystem(${MODULE_PREFIX} ${CHANNEL_NAME} "alsa" "")
 endif()
 
-message(STATUS "Check for WITH_IOSAUDIO")
-
 #get_cmake_property(_variableNames VARIABLES)
 #foreach (_variableName ${_variableNames})
 #    message(STATUS "${_variableName}=${${_variableName}}")
 #endforeach()
 
-#if(WITH_IOSAUDIO)
-#	message(STATUS "IOSAUDIO ACTIVE")
+if(WITH_IOSAUDIO)
+	message(STATUS "IOSAUDIO ACTIVE")
 	add_channel_client_subsystem($(MODULE_PREFIX) $(CHANNEL_NAME) "ios" "")
-#endif()
+endif()
 
 if(WITH_PULSE)
 	add_channel_client_subsystem(${MODULE_PREFIX} ${CHANNEL_NAME} "pulse" "")

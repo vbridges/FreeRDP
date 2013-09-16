@@ -224,21 +224,6 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
             break;
 	 
 	 */
-    }
-	
-	/*TESTING ONLY*/
-	{
-		settings->CustomBrokerEnabled = FALSE;
-		
-		settings->RdpSecurity = FALSE;
-		settings->TlsSecurity = FALSE;
-		settings->NlaSecurity = TRUE;
-		settings->ExtSecurity = FALSE;
-		
-		settings->Username = strdup("corey");
-		settings->Password = strdup("gaill#95");
-		settings->ServerHostname = strdup("sakura");
-		
 	}
     
     // ts gateway settings
