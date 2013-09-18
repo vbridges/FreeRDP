@@ -50,7 +50,7 @@ endif()
 
 if(WITH_IOSAUDIO)
 	message(STATUS "IOSAUDIO ACTIVE")
-	add_channel_client_subsystem($(MODULE_PREFIX) $(CHANNEL_NAME) "ios" "")
+	add_channel_client_subsystem($(MODULE_PREFIX) ${CHANNEL_NAME} "ios" "")
 endif()
 
 if(WITH_PULSE)
