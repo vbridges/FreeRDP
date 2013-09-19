@@ -665,6 +665,7 @@
 
 - (void)sessionFailedToConnect:(NSNotification*)notification
 {
+	NSLog(@"sessionFailedToConnect");
     // remove session from active sessions
     RDPSession* session = (RDPSession*)[notification object];
     [_active_sessions removeObject:session];    

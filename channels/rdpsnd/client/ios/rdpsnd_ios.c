@@ -92,7 +92,6 @@ static OSStatus rdpsnd_ios_render_cb(
 
 static BOOL rdpsnd_ios_format_supported(rdpsndDevicePlugin* __unused device, AUDIO_FORMAT* format)
 {
-	printf("format tag: %d", format->wFormatTag);
     if (format->wFormatTag == WAVE_FORMAT_PCM)
     {
         return 1;
@@ -157,7 +156,6 @@ static void rdpsnd_ios_play(rdpsndDevicePlugin* device, BYTE* data, int size)
 
 static void rdpsnd_ios_open(rdpsndDevicePlugin* device, AUDIO_FORMAT* format, int __unused latency)
 {
-	printf("ios_open called\n");
     rdpsndIOSPlugin *p = THIS(device);
 	
     if (p->is_opened)
@@ -283,7 +281,6 @@ static void rdpsnd_ios_free(rdpsndDevicePlugin* device)
 
 int freerdp_rdpsnd_client_subsystem_entry(PFREERDP_RDPSND_DEVICE_ENTRY_POINTS pEntryPoints)
 {
-	printf("called subsys entry\n");
     rdpsndIOSPlugin *p = (rdpsndIOSPlugin*)malloc(sizeof(rdpsndIOSPlugin));
     memset(p, 0, sizeof(rdpsndIOSPlugin));
     

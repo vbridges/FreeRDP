@@ -67,8 +67,6 @@ ios_pre_connect(freerdp * instance)
 	
     settings->FrameAcknowledge = 10;
 
-	
-	NSLog(@"preconnect~");
 	char* args[] = {"rdpsnd", "sys:ios"};
 	
 	freerdp_client_add_static_channel(instance->settings, 2, args);
@@ -91,8 +89,6 @@ static BOOL ios_post_connect(freerdp* instance)
 	instance->update->BeginPaint = ios_ui_begin_paint;
 	instance->update->EndPaint = ios_ui_end_paint;
 	instance->update->DesktopResize = ios_ui_resize_window;
-		
-	NSLog(@"PostConnect!");
 	
 	// Channel allocation
 	freerdp_channels_post_connect(instance->context->channels, instance);
