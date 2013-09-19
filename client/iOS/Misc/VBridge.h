@@ -33,7 +33,7 @@
 
 @property (nonatomic, copy) void (^completionCallback)();
 @property (nonatomic, copy) void (^gotTicketCallback)();
-@property (nonatomic, copy) void (^connectionFailedCallback)();
+@property (nonatomic, copy) void (^connectionFailedCallback) (NSString * errStr);
 
 
 + (NSString *)encodeBase64WithString:(NSString *)strData;
@@ -50,6 +50,6 @@
 -(NSString *)getDesktopNameByNum:(NSUInteger)dnum;
 
 -(void)callWhenGotTicket:(void (^)())cb;
--(void)setConnectionFailedCallback:(void (^)())cb;
+-(void)setConnectionFailedCallback:(void (^)(NSString *errStr))cb;
 
 @end

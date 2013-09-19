@@ -213,7 +213,7 @@ static const short _base64DecodingTable[256] = {
 	      [error localizedDescription],
 	      [[error userInfo] objectForKey:NSURLErrorFailingURLStringErrorKey]);
 	
-	_connectionFailedCallback();
+	_connectionFailedCallback([error localizedDescription]);
 }
 
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
@@ -372,7 +372,7 @@ static const short _base64DecodingTable[256] = {
 	_gotTicketCallback = [cb copy];
 }
 
--(void)setConnectionFailedCallback:(void (^)())cb
+-(void)setConnectionFailedCallback:(void (^)(NSString *))cb
 {
 	_connectionFailedCallback = [cb copy];
 }

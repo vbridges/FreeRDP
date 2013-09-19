@@ -6,6 +6,9 @@
 //
 //
 
+#import "Toast+UIView.h"
+
+
 #import "VerdeDeskopListViewController.h"
 #import "RDPSessionViewController.h"
 
@@ -161,9 +164,17 @@
 		[self.tab reloadData];
 	}];
 	
-	[self.vb setConnectionFailedCallback:^{
-	
-		[self dismiss];
+	[self.vb setConnectionFailedCallback:^(NSString *errStr){
+		
+		[[self view] makeToast:errStr duration:ToastDurationNormal position:@"center"];
+		
+		//[[self view] makeToast:NSLocalizedString(@"Failed to connect to session!", @"Failed to connect error message") duration:ToastDurationNormal position:@"center"];
+		
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_current_queue(), ^{
+			[self dismiss];
+		});
+		
+		
 	}];
 	
 	[self.vb getDesktops];
