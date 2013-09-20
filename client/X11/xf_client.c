@@ -1816,7 +1816,6 @@ int xfreerdp_client_new(freerdp* instance, rdpContext* context)
 	settings->OrderSupport[NEG_ELLIPSE_SC_INDEX] = FALSE;
 	settings->OrderSupport[NEG_ELLIPSE_CB_INDEX] = FALSE;
 
-
 	if(xfc->settings->PanByPix == 0)
 	  {
 		xfc->settings->PanByPix = 10;

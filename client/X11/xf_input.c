@@ -126,6 +126,8 @@ int xf_input_init(xfContext* xfc, Window window)
 	
 	if (xfc->settings->MultiTouchInput)
 		xfc->use_xinput = TRUE;
+
+	pan_by_pix = xfc->settings->PanByPix;
 	
 	info = XIQueryDevice(xfc->display, XIAllDevices, &ndevices);
 	
