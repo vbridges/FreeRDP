@@ -122,6 +122,12 @@ void xf_transform_window(xfContext* xfc)
 	Atom hints_atom;
 	XSizeHints* size_hints = NULL;
 
+	if(xfc->settings->ParentWindowId)
+	  {
+	    printf("toolkit has control of window\n");
+	    return;
+	  }
+
 	hints_atom = XInternAtom(xfc->display, "WM_SIZE_HINTS", 1);
 
 	//ret = XGetWMSizeHints(xfc->display, xfc->window->handle, size_hints, &supplied, hints_atom);
@@ -130,11 +136,11 @@ void xf_transform_window(xfContext* xfc)
 	ret = XGetWMNormalHints(xfc->display, xfc->window->handle, size_hints, &supplied);
 
 	//
-	/*
-	if(ret == 0)
-		size_hints = XAllocSizeHints();
+	
+//	if(ret == 0)
+//		size_hints = XAllocSizeHints();
 
-	*/
+	
 
 	total_width = (xfc->originalWidth * xfc->settings->ScalingFactor) + xfc->offset_x;
 	total_height = (xfc->originalHeight * xfc->settings->ScalingFactor) + xfc->offset_y;
@@ -158,6 +164,48 @@ void xf_transform_window(xfContext* xfc)
 	}
 }
 
+/*
+void xf_transform_window(xfContext* xfc)
+{
+  BOOL same;
+  int total_width;
+  int total_height;
+
+  printf("transform:\n");
+  printf("\tw,h = %d,%d\n", xfc->width, xfc->height);
+  printf("\torig = %d,%d\n", xfc->originalWidth, xfc->originalHeight);
+  printf("\tnow = %d,%d\n", xfc->currentWidth, xfc->currentHeight);
+
+  total_width = (xfc->originalWidth * xfc->settings->ScalingFactor) + xfc->offset_x;
+  total_height = (xfc->originalHeight * xfc->settings->ScalingFactor) + xfc->offset_y;
+  
+  if(xfc->currentWidth != total_width)
+    {
+
+      printf("transform to scale\n");
+
+      xfc->currentWidth = total_width;
+      xfc->currentHeight = total_height;
+
+      xf_lock_x11(xfc, TRUE);
+      
+      xf_ResizeDesktopWindow(xfc, xfc->window, xfc->currentWidth, xfc->currentHeight);
+      
+      same = (xfc->primary == xfc->drawing) ? TRUE : FALSE;
+      
+      XFreePixmap(xfc->display, xfc->primary);
+      
+      xfc->primary = XCreatePixmap(xfc->display, xfc->drawable,
+				   xfc->currentWidth, xfc->currentHeight, xfc->depth);
+      
+      if(same)
+	xfc->drawing = xfc->primary;
+      
+      xf_unlock_x11(xfc, TRUE);
+    }
+  
+}
+*/
 /*
  * This function is a wrapper to XRender such that
  *bitmaps can be drawn with an applied tranformation
