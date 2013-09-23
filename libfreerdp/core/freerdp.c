@@ -172,6 +172,7 @@ BOOL freerdp_connect(freerdp* instance)
 
 	EventArgsInit(&e, "freerdp");
 	e.result = status ? 0 : -1;
+	e.connectionErrCode = connectErrorCode;
 	PubSub_OnConnectionResult(instance->context->pubSub, instance->context, &e);
 
 	return status;

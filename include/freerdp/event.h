@@ -75,6 +75,7 @@ DEFINE_EVENT_END(Terminate)
 
 DEFINE_EVENT_BEGIN(ConnectionResult)
 	int result;
+	int connectionErrCode;
 DEFINE_EVENT_END(ConnectionResult)
 
 DEFINE_EVENT_BEGIN(ChannelConnected)

@@ -666,12 +666,32 @@
 - (void)sessionFailedToConnect:(NSNotification*)notification
 {
 	NSLog(@"sessionFailedToConnect");
-    // remove session from active sessions
-    RDPSession* session = (RDPSession*)[notification object];
-    [_active_sessions removeObject:session];    
-    
-    // display error toast
-    [[self view] makeToast:NSLocalizedString(@"Failed to connect to session!", @"Failed to connect error message") duration:ToastDurationNormal position:@"center"];
+	// remove session from active sessions
+	RDPSession* session = (RDPSession*)[notification object];
+	[_active_sessions removeObject:session];
+	
+	// display error toast
+	[[self view] makeToast:NSLocalizedString(@"Failed to connect to session!", @"Failed to connect error message") duration:ToastDurationNormal position:@"center"];
+	
+	int code;
+	code = [session rdpsession_connection_error_code];
+	
+	if (code == AUTHENTICATIONERROR)
+	{
+		NSString* errTxt = [NSString stringWithFormat:@"Authentication error."];
+		
+		[[self view] makeToast:errTxt duration:ToastDurationNormal*2 position:@"bottom"];
+		
+	}
+	else
+	{
+		/*
+		NSString* errTxt = [NSString stringWithFormat:@"Error Code: %d", code];
+		
+		[[self view] makeToast:errTxt duration:ToastDurationNormal position:@"bottom"];
+		 */
+	}
+	
 }
 
 #pragma mark - Reachability notification

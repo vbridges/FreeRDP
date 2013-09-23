@@ -127,7 +127,7 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 	    
 	if ([[_params StringForKey:@"password"] length])
 		settings->Password = strdup([_params UTF8StringForKey:@"password"]);
-	
+		
 	//if ([[_params StringForKey:@"domain"] length])
 		//settings->Domain = strdup([_params UTF8StringForKey:@"domain"]);
     
@@ -462,9 +462,11 @@ NSString* TSXSessionDidFailToConnectNotification = @"TSXSessionDidFailToConnect"
 }
 
 - (void)sessionDidFailToConnect:(int)reason
-{	
-    [[NSNotificationCenter defaultCenter] postNotificationName:TSXSessionDidFailToConnectNotification object:self];
-
+{
+	_rdpsession_connection_error_code = ios_freerdp_get_connection_err_code();
+	
+	[[NSNotificationCenter defaultCenter] postNotificationName:TSXSessionDidFailToConnectNotification object:self];
+	
 	if ([[self delegate] respondsToSelector:@selector(session:didFailToConnect:)])
 		[[self delegate] session:self didFailToConnect:reason];
 }

@@ -21,13 +21,31 @@
 #import "RDPSession.h"
 #import "Utils.h"
 
+int connectionErrorCode;
+
+int ios_freerdp_get_connection_err_code()
+{
+	return connectionErrorCode;
+}
+
+void ios_ConnectionResultHandler(rdpContext* context, ConnectionResultEventArgs* e)
+{	
+	if (e->connectionErrCode == AUTHENTICATIONERROR) {
+		printf("Authentication failed.\n");
+	}
+	
+	connectionErrorCode = e->connectionErrCode;
+}
+
 
 #pragma mark Connection helpers
 
 static BOOL
 ios_pre_connect(freerdp * instance)
-{	
-	rdpSettings* settings = instance->settings;	
+{
+	rdpSettings* settings = instance->settings;
+	
+	connectErrorCode = 0;
 
 	settings->AutoLogonEnabled = settings->Password && (strlen(settings->Password) > 0);
 	
@@ -66,6 +84,8 @@ ios_pre_connect(freerdp * instance)
 	settings->OrderSupport[NEG_ELLIPSE_CB_INDEX] = FALSE;
 	
     settings->FrameAcknowledge = 10;
+	
+	PubSub_SubscribeConnectionResult(instance->context->pubSub, (pConnectionResultEventHandler)ios_ConnectionResultHandler);
 
 	char* args[] = {"rdpsnd", "sys:ios"};
 	

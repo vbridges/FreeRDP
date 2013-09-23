@@ -65,6 +65,8 @@ extern NSString* TSXSessionDidFailToConnectNotification;
 	BOOL _toolbar_visible;  
 }
 
+@property (readwrite) int rdpsession_connection_error_code;
+
 @property (readonly) ConnectionParams* params;
 @property (readonly) ComputerBookmark* bookmark;
 @property (assign) id <RDPSessionDelegate> delegate;

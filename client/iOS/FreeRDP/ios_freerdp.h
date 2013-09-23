@@ -64,6 +64,8 @@ enum MF_EXIT_CODE
 	MF_EXIT_UNKNOWN = 255
 };
 
+int ios_freerdp_get_connection_err_code(void);
+
 void ios_init_freerdp(void);
 void ios_uninit_freerdp(void);
 freerdp* ios_freerdp_new(void);
