@@ -29,11 +29,7 @@ int ios_freerdp_get_connection_err_code()
 }
 
 void ios_ConnectionResultHandler(rdpContext* context, ConnectionResultEventArgs* e)
-{	
-	if (e->connectionErrCode == AUTHENTICATIONERROR) {
-		printf("Authentication failed.\n");
-	}
-	
+{
 	connectionErrorCode = e->connectionErrCode;
 }
 
