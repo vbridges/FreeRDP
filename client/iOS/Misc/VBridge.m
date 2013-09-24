@@ -183,6 +183,7 @@ static const short _base64DecodingTable[256] = {
 	else
 	{
 		NSLog(@"Connection Failed");
+		_connectionFailedCallback(@"Connection Failed -- Could not create connection");
 	}
 
 }
@@ -224,6 +225,21 @@ static const short _base64DecodingTable[256] = {
 	NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
 	
 	//NSLog(@"Receive Response: status=%d", [httpResponse statusCode]);
+	
+	if ([httpResponse statusCode] == 401)
+	{
+		_connectionFailedCallback(@"Broker: Authentication Error: 401");
+	}
+	
+	if ([httpResponse statusCode] == 403)
+	{
+		_connectionFailedCallback(@"Broker: Authentication Error: 403");
+	}
+	
+	if ([httpResponse statusCode] == 404)
+	{
+		_connectionFailedCallback(@"Broker: Invalid Image or Protocol Error: 404");
+	}
 	
 	NSDictionary *headers = [httpResponse allHeaderFields];
 	
