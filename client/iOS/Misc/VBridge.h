@@ -8,6 +8,11 @@
 
 #import <Foundation/Foundation.h>
 
+enum broker_mode {
+	AUTH_MODE,
+	CONNECT_MODE
+};
+
 @interface VBridge : NSObject
 
 @property (copy) NSString *username;
@@ -35,6 +40,8 @@
 @property (nonatomic, copy) void (^gotTicketCallback)();
 @property (nonatomic, copy) void (^connectionFailedCallback) (NSString * errStr);
 
+@property (readwrite) enum broker_mode bmode;
+@property (readwrite) BOOL didFail;
 
 + (NSString *)encodeBase64WithString:(NSString *)strData;
 

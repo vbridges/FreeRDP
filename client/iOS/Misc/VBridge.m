@@ -100,6 +100,8 @@ static const short _base64DecodingTable[256] = {
 	_verde_status = nil;
 	_security_ticket = nil;
 	
+	_didFail = FALSE;
+	
 	NSString *id_pass = [NSString stringWithFormat:@"%@:%@", self.username, self.password];
 	NSString *b64 = [VBridge encodeBase64WithString:id_pass];
 	self.auth_header = [NSString stringWithFormat:@"Basic %@", b64];
@@ -120,18 +122,12 @@ static const short _base64DecodingTable[256] = {
 
 -(void)getDesktops
 {
+	self.bmode = AUTH_MODE;
+	
 	NSString *fullURL = [NSString stringWithFormat:@"%@_mpcdesktops?version=v3", _broker_url];
-	
-	//NSLog(@"full url [%@]", fullURL);
-	
+		
 	NSURL *nurl = [NSURL URLWithString:fullURL];
-	/*
-	NSNumber *p = [nsurl port];
-	
-	if (p != nil) {
-		NSLog(@"---> port = %d", [p intValue]);
-	}
-	*/	
+		
 	/* create the request */
 	NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:nurl];
 	
@@ -159,7 +155,7 @@ static const short _base64DecodingTable[256] = {
 
 -(void)startDesktopByNum:(NSUInteger)dnum
 {
-	//NSLog(@"starting desktop [%@]", [self.names objectAtIndex:dnum]);
+	self.bmode = CONNECT_MODE;
 	
 	NSString *fullURL = [NSString stringWithFormat:@"%@_mpcstart?image=%@&protocol=0", _broker_url, [self.names objectAtIndex:dnum]];
 		
@@ -183,6 +179,7 @@ static const short _base64DecodingTable[256] = {
 	else
 	{
 		NSLog(@"Connection Failed");
+		_didFail = TRUE;
 		_connectionFailedCallback(@"Connection Failed -- Could not create connection");
 	}
 
@@ -214,6 +211,7 @@ static const short _base64DecodingTable[256] = {
 	      [error localizedDescription],
 	      [[error userInfo] objectForKey:NSURLErrorFailingURLStringErrorKey]);
 	
+	_didFail = TRUE;
 	_connectionFailedCallback([error localizedDescription]);
 }
 
@@ -228,17 +226,33 @@ static const short _base64DecodingTable[256] = {
 	
 	if ([httpResponse statusCode] == 401)
 	{
-		_connectionFailedCallback(@"Broker: Authentication Error: 401");
+		_didFail = TRUE;
+		_connectionFailedCallback(@"User Authentication Error");
 	}
 	
 	if ([httpResponse statusCode] == 403)
 	{
-		_connectionFailedCallback(@"Broker: Authentication Error: 403");
+		_didFail = TRUE;
+		_connectionFailedCallback(@"User Authentication Error");
 	}
 	
 	if ([httpResponse statusCode] == 404)
 	{
-		_connectionFailedCallback(@"Broker: Invalid Image or Protocol Error: 404");
+		_didFail = TRUE;
+		_connectionFailedCallback(@"Could not connect to the desktop");
+	}
+	
+	if ([httpResponse statusCode] == 500) {
+		
+		_didFail = TRUE;
+		if (self.bmode == AUTH_MODE) {
+			_connectionFailedCallback(@"Error in getting the desktop list");
+		}
+		
+		if (self.bmode == CONNECT_MODE) {
+			_connectionFailedCallback(@"Could not connect to the desktop");
+		}
+		
 	}
 	
 	NSDictionary *headers = [httpResponse allHeaderFields];

@@ -43,12 +43,6 @@
 {
 	[super viewDidLoad];
 	// Do any additional setup after loading the view.
-	
-	
-	//NSString *old_urlStr = @"https://verde01.aus.vbridges.com/";
-	//NSString *old_usrStr = @"cclayton@aus.vbridges.com";
-	//NSString *old_pass = @"C0ryClayt0n##";
-	//NSString *usrStr = @"cclayton";
 
 	NSString *urlStr = [NSString stringWithString:[self.bookmark.params StringForKey:@"hostname"]];
 	
@@ -158,7 +152,16 @@
 	self.vb = [[VBridge alloc] initWithUsername:usrStr Password:pass URL:urlStr completionHandler:^{
 		
 		if ([self.vb getNumDesktops] == 0) {
-			//[[self navigationController] popViewControllerAnimated:NO];
+			
+			if ([self.vb didFail] == FALSE) {
+				[[self view] makeToast:@"No desktop is assigned to the user" duration:ToastDurationNormal position:@"center"];
+			}
+			
+			
+			dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_current_queue(), ^{
+				[self dismiss];
+			});
+			
 		}
 		
 		[self.tab reloadData];
