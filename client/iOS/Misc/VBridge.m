@@ -239,7 +239,14 @@ static const short _base64DecodingTable[256] = {
 	if ([httpResponse statusCode] == 404)
 	{
 		_didFail = TRUE;
-		_connectionFailedCallback(@"Could not connect to the desktop");
+		if (self.bmode == AUTH_MODE) {
+			_connectionFailedCallback(@"Could not connect to the Server. Verify the URL");
+		}
+		
+		if (self.bmode == CONNECT_MODE) {
+			_connectionFailedCallback(@"Could not connect to the desktop");
+		}
+		
 	}
 	
 	if ([httpResponse statusCode] == 500) {
