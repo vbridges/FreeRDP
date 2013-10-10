@@ -117,6 +117,8 @@ struct xf_context
 	int offset_x;
 	int offset_y;
 
+	BOOL supress_mouse;
+
 	BOOL focused;
 	BOOL use_xinput;
 	BOOL mouse_active;

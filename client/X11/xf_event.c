@@ -181,6 +181,9 @@ static BOOL xf_event_MotionNotify(xfContext* xfc, XEvent* event, BOOL app)
 	if (xfc->use_xinput)
 		return TRUE;
 
+	if (xfc->supress_mouse)
+		return TRUE;
+
 	return xf_generic_MotionNotify(xfc, event->xmotion.x, event->xmotion.y,
 			event->xmotion.state, event->xmotion.window, app);
 }
@@ -287,6 +290,9 @@ BOOL xf_generic_ButtonPress(xfContext* xfc, int x, int y, int button, Window win
 static BOOL xf_event_ButtonPress(xfContext* xfc, XEvent* event, BOOL app)
 {
 	if (xfc->use_xinput)
+		return TRUE;
+
+	if(xfc->supress_mouse)
 		return TRUE;
 
 	return xf_generic_ButtonPress(xfc, event->xbutton.x, event->xbutton.y,

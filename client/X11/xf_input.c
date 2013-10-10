@@ -471,6 +471,11 @@ void xf_input_touch_begin(xfContext* xfc, XIDeviceEvent* event)
 			break;
 		}
 	}
+
+	if(active_contacts > 1)
+	{
+		xfc->supress_mouse = TRUE;
+	}
 }
 
 void xf_input_touch_update(xfContext* xfc, XIDeviceEvent* event)
@@ -507,8 +512,13 @@ void xf_input_touch_end(xfContext* xfc, XIDeviceEvent* event)
 			//contacts[i].pos_y = (int)event->event_y;
 			
 			active_contacts--;
-			break;printf("TouchBegin\n");
+			break;
 		}
+	}
+
+	if(active_contacts < 2)
+	{
+		xfc->supress_mouse = FALSE;
 	}
 }
 

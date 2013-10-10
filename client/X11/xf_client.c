@@ -118,32 +118,38 @@ void xf_transform_window(xfContext* xfc)
 	int ret;
 	int total_width;
 	int total_height;
+	int wdiff;
 	long supplied;
 	Atom hints_atom;
 	XSizeHints* size_hints = NULL;
 
-	if(xfc->settings->ParentWindowId)
-	{
+	//if(xfc->settings->ParentWindowId)
+	//{
 		//printf("toolkit has control of window\n");
-	}
+	//}
 
 
 	hints_atom = XInternAtom(xfc->display, "WM_SIZE_HINTS", 1);
 
-	//ret = XGetWMSizeHints(xfc->display, xfc->window->handle, size_hints, &supplied, hints_atom);
-
 	size_hints = XAllocSizeHints();
 	ret = XGetWMNormalHints(xfc->display, xfc->window->handle, size_hints, &supplied);
-
-	//
-	
-//	if(ret == 0)
-//		size_hints = XAllocSizeHints();
-
 	
 
 	total_width = (xfc->originalWidth * xfc->settings->ScalingFactor) + xfc->offset_x;
 	total_height = (xfc->originalHeight * xfc->settings->ScalingFactor) + xfc->offset_y;
+
+	wdiff = abs(total_width - xfc->originalWidth);
+	if( (xfc->offset_x == 0) &&
+			(wdiff != 0) &&
+			(wdiff < 5) )
+	{
+		//printf("\txform_window: [%dx%d] [%dx%d]\n", total_width, total_height, xfc->originalWidth, xfc->originalHeight);
+
+		xfc->settings->ScalingFactor = 1.0;
+
+		total_width = (xfc->originalWidth * xfc->settings->ScalingFactor) + xfc->offset_x;
+		total_height = (xfc->originalHeight * xfc->settings->ScalingFactor) + xfc->offset_x;
+	}
 
 	if(total_width < 1)
 		total_width = 1;
@@ -225,8 +231,29 @@ void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL
 			xr.width = w;
 			xr.height = h;
 		}
+
+
+
 		XRenderSetPictureClipRectangles(xfc->display, primaryPicture, 0, 0, &xr, 1);
 	}
+	else
+	{
+		//We might have a small difference due to rounding error
+
+		//printf("draw xform: [%dx%d] vs [%dx%d] scale: %f\n", xfc->currentWidth, xfc->currentHeight, xfc->originalWidth, xfc->originalHeight, xfc->settings->ScalingFactor);
+
+		int wdiff = abs(xfc->currentWidth - xfc->originalWidth);
+		if( (wdiff) && (wdiff < 5) )
+		{
+			printf("correcting rounding error\n");
+			xfc->currentWidth = xfc->originalWidth;
+			xfc->currentHeight = xfc->originalHeight;
+			xfc->settings->ScalingFactor = 1.0;
+
+			transform.matrix[2][2] = XDoubleToFixed(xfc->settings->ScalingFactor);
+		}
+	}
+
 
 	switch(xfc->settings->RenderQuality)
 	{
