@@ -245,7 +245,7 @@ void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL
 		int wdiff = abs(xfc->currentWidth - xfc->originalWidth);
 		if( (wdiff) && (wdiff < 5) )
 		{
-			printf("correcting rounding error\n");
+			//printf("correcting rounding error\n");
 			xfc->currentWidth = xfc->originalWidth;
 			xfc->currentHeight = xfc->originalHeight;
 			xfc->settings->ScalingFactor = 1.0;
