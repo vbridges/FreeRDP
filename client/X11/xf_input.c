@@ -408,11 +408,10 @@ void xf_input_detect_pinch(xfContext* xfc)
 				xfc->settings->ScalingFactor = 0.8;
 			
 			EventArgsInit(&e, "xfreerdp");
-			e.width = (int) xfc->originalWidth * xfc->settings->ScalingFactor;
-			e.height = (int) xfc->originalHeight * xfc->settings->ScalingFactor;
 
-			xfc->currentWidth = e.width;
-			xfc->currentHeight = e.height;
+			xf_scale_update(xfc);
+			e.width = xfc->currentWidth;
+			e.height = xfc->currentHeight;
 			
 			xf_transform_window(xfc);
 			PubSub_OnResizeWindow(((rdpContext*) xfc)->pubSub, xfc, &e);
@@ -433,11 +432,10 @@ void xf_input_detect_pinch(xfContext* xfc)
 				xfc->settings->ScalingFactor = 1.2;
 			
 			EventArgsInit(&e, "xfreerdp");
-			e.width = (int) xfc->originalWidth * xfc->settings->ScalingFactor;
-			e.height = (int) xfc->originalHeight * xfc->settings->ScalingFactor;
-			
-			xfc->currentWidth = e.width;
-			xfc->currentHeight = e.height;
+
+			xf_scale_update(xfc);
+			e.width = xfc->currentWidth;
+			e.height = xfc->currentHeight;
 
 			xf_transform_window(xfc);
 			PubSub_OnResizeWindow(((rdpContext*) xfc)->pubSub, xfc, &e);

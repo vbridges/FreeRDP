@@ -233,8 +233,7 @@ BOOL xf_kbd_handle_special_keys(xfContext* xfc, KeySym keysym)
 			
 			xfc->settings->ScalingFactor = s;
 			
-			xfc->currentWidth = xfc->originalWidth * s;
-			xfc->currentHeight = xfc->originalHeight * s;
+			xf_scale_update(xfc);
 			
 			xf_transform_window(xfc);
 			
@@ -242,8 +241,8 @@ BOOL xf_kbd_handle_special_keys(xfContext* xfc, KeySym keysym)
 				ResizeWindowEventArgs e;
 				
 				EventArgsInit(&e, "xfreerdp");
-				e.width = (int) xfc->originalWidth * xfc->settings->ScalingFactor;
-				e.height = (int) xfc->originalHeight * xfc->settings->ScalingFactor;
+				e.width = xfc->currentWidth;
+				e.height = xfc->currentHeight;
 				PubSub_OnResizeWindow(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
 			xf_draw_transformed_region(xfc, 0, 0, 0, 0, FALSE);
@@ -267,8 +266,7 @@ BOOL xf_kbd_handle_special_keys(xfContext* xfc, KeySym keysym)
 			
 			xfc->settings->ScalingFactor = s;
 			
-			xfc->currentWidth = xfc->originalWidth * s;
-			xfc->currentHeight = xfc->originalHeight * s;
+			xf_scale_update(xfc);
 			
 			xf_transform_window(xfc);
 			
@@ -276,8 +274,8 @@ BOOL xf_kbd_handle_special_keys(xfContext* xfc, KeySym keysym)
 				ResizeWindowEventArgs e;
 				
 				EventArgsInit(&e, "xfreerdp");
-				e.width = (int) xfc->originalWidth * xfc->settings->ScalingFactor;
-				e.height = (int) xfc->originalHeight * xfc->settings->ScalingFactor;
+				e.width = xfc->currentWidth;
+				e.height = xfc->currentHeight;
 				PubSub_OnResizeWindow(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
 			

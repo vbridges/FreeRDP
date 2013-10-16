@@ -143,7 +143,7 @@ void xf_transform_window(xfContext* xfc)
 			(wdiff != 0) &&
 			(wdiff < 5) )
 	{
-		//printf("\txform_window: [%dx%d] [%dx%d]\n", total_width, total_height, xfc->originalWidth, xfc->originalHeight);
+		printf("\txform_window: [%dx%d] [%dx%d]\n", total_width, total_height, xfc->originalWidth, xfc->originalHeight);
 
 		xfc->settings->ScalingFactor = 1.0;
 
@@ -159,6 +159,7 @@ void xf_transform_window(xfContext* xfc)
 
 	if (size_hints)
 	{
+	  //printf("total: width: %d height: %d\n", total_width, total_height);
 		size_hints->flags |= PMinSize | PMaxSize;
 		size_hints->min_width = size_hints->max_width = total_width;
 		size_hints->min_height = size_hints->max_height = total_height;
@@ -245,7 +246,7 @@ void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL
 		int wdiff = abs(xfc->currentWidth - xfc->originalWidth);
 		if( (wdiff) && (wdiff < 5) )
 		{
-			//printf("correcting rounding error\n");
+		  printf("correcting rounding error\n");
 			xfc->currentWidth = xfc->originalWidth;
 			xfc->currentHeight = xfc->originalHeight;
 			xfc->settings->ScalingFactor = 1.0;
@@ -272,6 +273,7 @@ void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL
 
 	XRenderSetPictureTransform(xfc->display, primaryPicture, &transform);
 
+	//printf("xrc| x: %d y:%d curr_w: %d curr_h: %d ... w,h: %d,%d\n", xfc->offset_x, xfc->offset_y, xfc->currentWidth, xfc->currentHeight, w, h);
 	XRenderComposite(xfc->display, PictOpSrc, primaryPicture, 0, windowPicture, 0, 0, 0, 0, xfc->offset_x, xfc->offset_y, xfc->currentWidth, xfc->currentHeight);
 
 	XRenderFreePicture(xfc->display, primaryPicture);
@@ -279,6 +281,24 @@ void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL
 
 #endif
 
+}
+
+void xf_scale_update(xfContext* xfc)
+{
+  int wdiff;
+
+  xfc->currentWidth = (int)(xfc->originalWidth * xfc->settings->ScalingFactor);
+  xfc->currentHeight = (int)(xfc->originalHeight * xfc->settings->ScalingFactor);
+
+  //check for floating point rounding error
+  wdiff = abs(xfc->currentWidth - xfc->originalWidth);
+  if( (wdiff) && (wdiff < 3) )
+    {
+      xfc->currentWidth = xfc->originalWidth;
+      xfc->currentHeight = xfc->originalHeight;
+
+      xfc->settings->ScalingFactor = 1.0;
+    } 
 }
 
 void xf_sw_begin_paint(rdpContext* context)
@@ -1698,8 +1718,7 @@ void xf_ParamChangeEventHandler(rdpContext* context, ParamChangeEventArgs* e)
 	{
 	case FreeRDP_ScalingFactor:
 
-		xfc->currentWidth = xfc->originalWidth * xfc->settings->ScalingFactor;
-		xfc->currentHeight = xfc->originalHeight * xfc->settings->ScalingFactor;
+		xf_scale_update(xfc);
 
 		xf_transform_window(xfc);
 
@@ -1707,8 +1726,8 @@ void xf_ParamChangeEventHandler(rdpContext* context, ParamChangeEventArgs* e)
 			ResizeWindowEventArgs e;
 
 			EventArgsInit(&e, "xfreerdp");
-			e.width = (int) xfc->originalWidth * xfc->settings->ScalingFactor;
-			e.height = (int) xfc->originalHeight * xfc->settings->ScalingFactor;
+			e.width = xfc->currentWidth;
+			e.height = xfc->currentHeight;
 			PubSub_OnResizeWindow(((rdpContext*) xfc)->pubSub, xfc, &e);
 		}
 		xf_draw_transformed_region(xfc, 0, 0, 0, 0, FALSE);
@@ -1731,9 +1750,7 @@ void xf_ScalingFactorChangeEventHandler(rdpContext* context, ScalingFactorChange
 	if (xfc->settings->ScalingFactor < 0.8)
 		xfc->settings->ScalingFactor = 0.8;
 
-
-	xfc->currentWidth = xfc->originalWidth * xfc->settings->ScalingFactor;
-	xfc->currentHeight = xfc->originalHeight * xfc->settings->ScalingFactor;
+	xf_scale_update(xfc);
 
 	xf_transform_window(xfc);
 
@@ -1741,8 +1758,8 @@ void xf_ScalingFactorChangeEventHandler(rdpContext* context, ScalingFactorChange
 		ResizeWindowEventArgs e;
 
 		EventArgsInit(&e, "xfreerdp");
-		e.width = (int) xfc->originalWidth * xfc->settings->ScalingFactor;
-		e.height = (int) xfc->originalHeight * xfc->settings->ScalingFactor;
+		e.width = xfc->currentWidth;
+		e.height = xfc->currentHeight;		
 		PubSub_OnResizeWindow(((rdpContext*) xfc)->pubSub, xfc, &e);
 	}
 	xf_draw_transformed_region(xfc, 0, 0, 0, 0, FALSE);

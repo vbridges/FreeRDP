@@ -3,6 +3,7 @@
  * X11 Client
  *
  * Copyright 2011 Marc-Andre Moreau <marcandre.moreau@gmail.com>
+ * Copyright 2013 Corey Clayton <can.of.tuna@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -215,6 +216,7 @@ void xf_unlock_x11(xfContext* xfc, BOOL display);
 
 void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL scale);
 void xf_transform_window(xfContext* xfc);
+void xf_scale_update(xfContext* xfc);
 
 DWORD xf_exit_code_from_disconnect_reason(DWORD reason);
 
