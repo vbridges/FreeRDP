@@ -118,7 +118,6 @@ void xf_transform_window(xfContext* xfc)
 	int ret;
 	int total_width;
 	int total_height;
-	int wdiff;
 	long supplied;
 	Atom hints_atom;
 	XSizeHints* size_hints = NULL;
@@ -138,19 +137,6 @@ void xf_transform_window(xfContext* xfc)
 	total_width = (xfc->originalWidth * xfc->settings->ScalingFactor) + xfc->offset_x;
 	total_height = (xfc->originalHeight * xfc->settings->ScalingFactor) + xfc->offset_y;
 
-	wdiff = abs(total_width - xfc->originalWidth);
-	if( (xfc->offset_x == 0) &&
-			(wdiff != 0) &&
-			(wdiff < 5) )
-	{
-		printf("\txform_window: [%dx%d] [%dx%d]\n", total_width, total_height, xfc->originalWidth, xfc->originalHeight);
-
-		xfc->settings->ScalingFactor = 1.0;
-
-		total_width = (xfc->originalWidth * xfc->settings->ScalingFactor) + xfc->offset_x;
-		total_height = (xfc->originalHeight * xfc->settings->ScalingFactor) + xfc->offset_x;
-	}
-
 	if(total_width < 1)
 		total_width = 1;
 
@@ -159,7 +145,6 @@ void xf_transform_window(xfContext* xfc)
 
 	if (size_hints)
 	{
-	  //printf("total: width: %d height: %d\n", total_width, total_height);
 		size_hints->flags |= PMinSize | PMaxSize;
 		size_hints->min_width = size_hints->max_width = total_width;
 		size_hints->min_height = size_hints->max_height = total_height;
@@ -237,24 +222,6 @@ void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL
 
 		XRenderSetPictureClipRectangles(xfc->display, primaryPicture, 0, 0, &xr, 1);
 	}
-	else
-	{
-		//We might have a small difference due to rounding error
-
-		//printf("draw xform: [%dx%d] vs [%dx%d] scale: %f\n", xfc->currentWidth, xfc->currentHeight, xfc->originalWidth, xfc->originalHeight, xfc->settings->ScalingFactor);
-
-		int wdiff = abs(xfc->currentWidth - xfc->originalWidth);
-		if( (wdiff) && (wdiff < 5) )
-		{
-		  printf("correcting rounding error\n");
-			xfc->currentWidth = xfc->originalWidth;
-			xfc->currentHeight = xfc->originalHeight;
-			xfc->settings->ScalingFactor = 1.0;
-
-			transform.matrix[2][2] = XDoubleToFixed(xfc->settings->ScalingFactor);
-		}
-	}
-
 
 	switch(xfc->settings->RenderQuality)
 	{
@@ -273,7 +240,6 @@ void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL
 
 	XRenderSetPictureTransform(xfc->display, primaryPicture, &transform);
 
-	//printf("xrc| x: %d y:%d curr_w: %d curr_h: %d ... w,h: %d,%d\n", xfc->offset_x, xfc->offset_y, xfc->currentWidth, xfc->currentHeight, w, h);
 	XRenderComposite(xfc->display, PictOpSrc, primaryPicture, 0, windowPicture, 0, 0, 0, 0, xfc->offset_x, xfc->offset_y, xfc->currentWidth, xfc->currentHeight);
 
 	XRenderFreePicture(xfc->display, primaryPicture);
