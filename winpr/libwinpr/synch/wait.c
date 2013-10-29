@@ -44,9 +44,41 @@
 
 #ifndef _WIN32
 
+#include <time.h>
+#include <sys/time.h>
+#include <sys/wait.h>
+
 #include "../handle/handle.h"
 
 #include "../pipe/pipe.h"
+
+#ifdef __MACH__
+
+#include <mach/mach_time.h>
+
+#define CLOCK_REALTIME 0
+#define CLOCK_MONOTONIC 0
+
+int clock_gettime(int clk_id, struct timespec *t)
+{
+	UINT64 time;
+	double seconds;
+	double nseconds;
+	mach_timebase_info_data_t timebase;
+	
+	mach_timebase_info(&timebase);
+	time = mach_absolute_time();
+	
+	nseconds = ((double) time * (double) timebase.numer) / ((double) timebase.denom);
+	seconds = ((double) time * (double) timebase.numer) / ((double) timebase.denom * 1e9);
+	
+	t->tv_sec = seconds;
+	t->tv_nsec = nseconds;
+	
+	return 0;
+}
+
+#endif
 
 /* Drop in replacement for the linux pthread_timedjoin_np and
  * pthread_mutex_timedlock functions.
@@ -136,6 +168,7 @@ DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds)
 
 		if (thread->started)
 		{
+#ifdef __linux__
 			if (dwMilliseconds != INFINITE)
 			{
 				struct timespec timeout;
@@ -153,6 +186,7 @@ DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds)
 					return WAIT_TIMEOUT;
 			}
 			else
+#endif
 				status = pthread_join(thread->thread, &thread_status);
 
 			if (status != 0)
@@ -167,13 +201,14 @@ DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds)
 	}
 	else if (Type == HANDLE_TYPE_MUTEX)
 	{
-		int status;
 		WINPR_MUTEX* mutex;
 
 		mutex = (WINPR_MUTEX*) Object;
 
+#ifdef __linux__
 		if (dwMilliseconds != INFINITE)
 		{
+			int status;
 			struct timespec timeout;
 
 			clock_gettime(CLOCK_REALTIME, &timeout);
@@ -184,6 +219,7 @@ DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds)
 				return WAIT_TIMEOUT;
 		}
 		else
+#endif
 		{
 			pthread_mutex_lock(&mutex->mutex);
 		}
