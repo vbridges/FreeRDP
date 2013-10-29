@@ -83,13 +83,15 @@ typedef short SHORT;
 typedef void* HANDLE, *PHANDLE, *LPHANDLE;
 typedef HANDLE HINSTANCE;
 typedef HANDLE HMODULE;
+typedef HANDLE HWND;
+typedef HANDLE HBITMAP;
 
 typedef DWORD HCALL;
 typedef int INT, *LPINT;
 typedef signed char INT8;
 typedef signed short INT16;
-typedef signed int INT32;
 #ifndef XMD_H
+typedef signed int INT32;
 typedef signed __int64 INT64;
 #endif
 typedef const WCHAR* LMCSTR;
@@ -113,7 +115,6 @@ typedef WCHAR* LPWSTR, *PWSTR, *LPWCH;
 typedef const WCHAR *LPCWSTR,*PCWSTR;
 
 typedef unsigned __int64 QWORD;
-typedef UCHAR* STRING;
 
 typedef unsigned int UINT;
 typedef unsigned char UINT8;
@@ -157,6 +158,9 @@ typedef struct _LUID
 	DWORD LowPart;
 	LONG  HighPart;
 } LUID, *PLUID;
+
+typedef GUID IID;
+typedef IID* REFIID;
 
 #ifdef UNICODE
 #define _T(x)	L ## x

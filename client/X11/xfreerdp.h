@@ -23,6 +23,8 @@
 
 typedef struct xf_context xfContext;
 
+#include <freerdp/api.h>
+
 #include "xf_window.h"
 #include "xf_monitor.h"
 #include "xf_channels.h"
@@ -90,6 +92,7 @@ struct xf_context
 	BOOL unobscured;
 	BOOL debug;
 	xfWindow* window;
+	xfPointer* pointer;
 	xfWorkArea workArea;
 	int current_desktop;
 	BOOL remote_app;
@@ -97,6 +100,7 @@ struct xf_context
 	HCLRCONV clrconv;
 	HANDLE mutex;
 	BOOL UseXThreads;
+	BOOL cursorHidden;
 
 	HGDI_DC hdc;
 	BYTE* primary_buffer;
@@ -107,7 +111,6 @@ struct xf_context
 	UINT16 frame_x2;
 	UINT16 frame_y2;
 
-	//double scale;
 	int originalWidth;
 	int originalHeight;
 	int currentWidth;
@@ -218,7 +221,7 @@ void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL
 void xf_transform_window(xfContext* xfc);
 void xf_scale_update(xfContext* xfc);
 
-DWORD xf_exit_code_from_disconnect_reason(DWORD reason);
+FREERDP_API DWORD xf_exit_code_from_disconnect_reason(DWORD reason);
 
 #endif /* __XFREERDP_H */
 

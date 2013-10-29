@@ -25,6 +25,7 @@ set(${MODULE_PREFIX}_COLLECTIONS_SRCS
 	collections/Reference.c
 	collections/ArrayList.c
 	collections/Dictionary.c
+	collections/LinkedList.c
 	collections/ListDictionary.c
 	collections/KeyValuePair.c
 	collections/CountdownEvent.c
@@ -50,7 +51,8 @@ set(${MODULE_PREFIX}_SRCS
 	ntlm.c
 	print.c
 	stream.c
-	cmdline.c)
+	cmdline.c
+	wlog.c)
 
 set(${MODULE_PREFIX}_SRCS ${${MODULE_PREFIX}_SRCS}
 	${${MODULE_PREFIX}_COLLECTIONS_SRCS}

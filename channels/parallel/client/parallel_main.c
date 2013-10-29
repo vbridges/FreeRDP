@@ -137,7 +137,7 @@ static void parallel_process_irp_read(PARALLEL_DEVICE* parallel, IRP* irp)
 
 	buffer = (BYTE*) malloc(Length);
 
-	status = read(parallel->file, irp->output->pointer, Length);
+	status = read(parallel->file, buffer, Length);
 
 	if (status < 0)
 	{
@@ -286,6 +286,7 @@ static void parallel_free(DEVICE* device)
 	MessageQueue_PostQuit(parallel->queue, 0);
 	WaitForSingleObject(parallel->thread, INFINITE);
 
+	Stream_Free(parallel->device.data, TRUE);
 	MessageQueue_Free(parallel->queue);
 	CloseHandle(parallel->thread);
 

@@ -31,7 +31,7 @@
 #include <freerdp/crypto/per.h>
 
 #ifdef WITH_DEBUG_RDP
-static const char* const DATA_PDU_TYPE_STRINGS[] =
+const char* DATA_PDU_TYPE_STRINGS[80] =
 {
 		"?", "?", /* 0x00 - 0x01 */
 		"Update", /* 0x02 */
@@ -65,7 +65,7 @@ static const char* const DATA_PDU_TYPE_STRINGS[] =
 		"?", "?", "?", /* 0x33 - 0x35 */
 		"Status Info", /* 0x36 */
 		"Monitor Layout" /* 0x37 */
-		"?", "?", "?", /* 0x38 - 0x40 */
+		"FrameAcknowledge", "?", "?", /* 0x38 - 0x40 */
 		"?", "?", "?", "?", "?", "?" /* 0x41 - 0x46 */
 };
 #endif
@@ -133,20 +133,21 @@ void rdp_write_share_control_header(wStream* s, UINT16 length, UINT16 type, UINT
 	Stream_Write_UINT16(s, channel_id); /* pduSource */
 }
 
-BOOL rdp_read_share_data_header(wStream* s, UINT16* length, BYTE* type, UINT32* share_id,
-					BYTE *compressed_type, UINT16 *compressed_len)
+BOOL rdp_read_share_data_header(wStream* s, UINT16* length, BYTE* type, UINT32* shareId,
+					BYTE *compressedType, UINT16 *compressedLen)
 {
 	if (Stream_GetRemainingLength(s) < 12)
 		return FALSE;
 
 	/* Share Data Header */
-	Stream_Read_UINT32(s, *share_id); /* shareId (4 bytes) */
+	Stream_Read_UINT32(s, *shareId); /* shareId (4 bytes) */
 	Stream_Seek_UINT8(s); /* pad1 (1 byte) */
 	Stream_Seek_UINT8(s); /* streamId (1 byte) */
 	Stream_Read_UINT16(s, *length); /* uncompressedLength (2 bytes) */
 	Stream_Read_UINT8(s, *type); /* pduType2, Data PDU Type (1 byte) */
-	Stream_Read_UINT8(s, *compressed_type); /* compressedType (1 byte) */
-	Stream_Read_UINT16(s, *compressed_len); /* compressedLength (2 bytes) */
+	Stream_Read_UINT8(s, *compressedType); /* compressedType (1 byte) */
+	Stream_Read_UINT16(s, *compressedLen); /* compressedLength (2 bytes) */
+
 	return TRUE;
 }
 
@@ -236,8 +237,9 @@ wStream* rdp_data_pdu_init(rdpRdp* rdp)
  * @param channel_id channel id
  */
 
-BOOL rdp_read_header(rdpRdp* rdp, wStream* s, UINT16* length, UINT16* channel_id)
+BOOL rdp_read_header(rdpRdp* rdp, wStream* s, UINT16* length, UINT16* channelId)
 {
+	BYTE byte;
 	UINT16 initiator;
 	enum DomainMCSPDU MCSPDU;
 
@@ -274,8 +276,8 @@ BOOL rdp_read_header(rdpRdp* rdp, wStream* s, UINT16* length, UINT16* channel_id
 		return FALSE;
 
 	per_read_integer16(s, &initiator, MCS_BASE_CHANNEL_ID); /* initiator (UserId) */
-	per_read_integer16(s, channel_id, 0); /* channelId */
-	Stream_Seek(s, 1); /* dataPriority + Segmentation (0x70) */
+	per_read_integer16(s, channelId, 0); /* channelId */
+	Stream_Read_UINT8(s, byte); /* dataPriority + Segmentation (0x70) */
 
 	if (!per_read_length(s, length)) /* userData (OCTET_STRING) */
 		return FALSE;
@@ -294,7 +296,7 @@ BOOL rdp_read_header(rdpRdp* rdp, wStream* s, UINT16* length, UINT16* channel_id
  * @param channel_id channel id
  */
 
-void rdp_write_header(rdpRdp* rdp, wStream* s, UINT16 length, UINT16 channel_id)
+void rdp_write_header(rdpRdp* rdp, wStream* s, UINT16 length, UINT16 channelId)
 {
 	int body_length;
 	enum DomainMCSPDU MCSPDU;
@@ -314,10 +316,10 @@ void rdp_write_header(rdpRdp* rdp, wStream* s, UINT16 length, UINT16 channel_id)
 
 	mcs_write_domain_mcspdu_header(s, MCSPDU, length, 0);
 	per_write_integer16(s, rdp->mcs->user_id, MCS_BASE_CHANNEL_ID); /* initiator */
-	per_write_integer16(s, channel_id, 0); /* channelId */
+	per_write_integer16(s, channelId, 0); /* channelId */
 	Stream_Write_UINT8(s, 0x70); /* dataPriority + segmentation */
 	/*
-	 * We always encode length in two bytes, eventhough we could use
+	 * We always encode length in two bytes, even though we could use
 	 * only one byte if length <= 0x7F. It is just easier that way,
 	 * because we can leave room for fixed-length header, store all
 	 * the data first and then store the header.
@@ -566,9 +568,8 @@ int rdp_recv_data_pdu(rdpRdp* rdp, wStream* s)
 	}
 
 #ifdef WITH_DEBUG_RDP
-	/* if (type != DATA_PDU_TYPE_UPDATE) */
-		DEBUG_RDP("recv %s Data PDU (0x%02X), length:%d",
-				type < ARRAYSIZE(DATA_PDU_TYPE_STRINGS) ? DATA_PDU_TYPE_STRINGS[type] : "???", type, length);
+	printf("recv %s Data PDU (0x%02X), length: %d\n",
+		type < ARRAYSIZE(DATA_PDU_TYPE_STRINGS) ? DATA_PDU_TYPE_STRINGS[type] : "???", type, length);
 #endif
 
 	switch (type)
@@ -783,7 +784,7 @@ static int rdp_recv_tpkt_pdu(rdpRdp* rdp, wStream* s)
 	UINT16 pduType;
 	UINT16 pduLength;
 	UINT16 pduSource;
-	UINT16 channelId;
+	UINT16 channelId = 0;
 	UINT16 securityFlags;
 	int nextPosition;
 
@@ -926,20 +927,21 @@ static int rdp_recv_callback(rdpTransport* transport, wStream* s, void* extra)
 				status = -1;
 			break;
 
-		case CONNECTION_STATE_LICENSE:
+		case CONNECTION_STATE_LICENSING:
 			if (!rdp_client_connect_license(rdp, s))
 				status = -1;
 			break;
 
-		case CONNECTION_STATE_CAPABILITY:
+		case CONNECTION_STATE_CAPABILITIES_EXCHANGE:
 			if (!rdp_client_connect_demand_active(rdp, s))
 				status = -1;
 			break;
 
 		case CONNECTION_STATE_FINALIZATION:
 			status = rdp_recv_pdu(rdp, s);
+
 			if ((status >= 0) && (rdp->finalize_sc_pdus == FINALIZE_SC_COMPLETE))
-				rdp->state = CONNECTION_STATE_ACTIVE;
+				rdp_client_transition_to_state(rdp, CONNECTION_STATE_ACTIVE);
 			break;
 
 		case CONNECTION_STATE_ACTIVE:
@@ -982,23 +984,25 @@ int rdp_check_fds(rdpRdp* rdp)
  * @return new RDP module
  */
 
-rdpRdp* rdp_new(freerdp* instance)
+rdpRdp* rdp_new(rdpContext* context)
 {
 	rdpRdp* rdp;
 
 	rdp = (rdpRdp*) malloc(sizeof(rdpRdp));
 
-	if (rdp != NULL)
+	if (rdp)
 	{
 		ZeroMemory(rdp, sizeof(rdpRdp));
 
-		rdp->instance = instance;
-		rdp->settings = freerdp_settings_new((void*) instance);
+		rdp->context = context;
 
-		if (instance != NULL)
-			instance->settings = rdp->settings;
+		rdp->instance = context->instance;
+		rdp->settings = freerdp_settings_new((void*) context->instance);
 
-		rdp->extension = extension_new(instance);
+		if (context->instance)
+			context->instance->settings = rdp->settings;
+
+		rdp->extension = extension_new(context->instance);
 		rdp->transport = transport_new(rdp->settings);
 		rdp->license = license_new(rdp);
 		rdp->input = input_new(rdp);

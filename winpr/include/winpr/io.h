@@ -25,6 +25,8 @@
 
 #ifndef _WIN32
 
+#include <winpr/nt.h>
+
 typedef struct _OVERLAPPED
 {
 	ULONG_PTR Internal;

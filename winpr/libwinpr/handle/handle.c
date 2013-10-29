@@ -48,8 +48,7 @@ BOOL CloseHandle(HANDLE hObject)
 		WINPR_THREAD* thread;
 
 		thread = (WINPR_THREAD*) Object;
-
-		free(Object);
+		free(thread);
 
 		return TRUE;
 	}
@@ -122,6 +121,21 @@ BOOL CloseHandle(HANDLE hObject)
 
 		return TRUE;
 	}
+	else if (Type == HANDLE_TYPE_TIMER)
+	{
+		WINPR_TIMER* timer;
+
+		timer = (WINPR_TIMER*) Object;
+
+#ifdef __linux__
+		if (timer->fd != -1)
+			close(timer->fd);
+#endif
+
+		free(Object);
+
+		return TRUE;
+	}
 	else if (Type == HANDLE_TYPE_ANONYMOUS_PIPE)
 	{
 		WINPR_PIPE* pipe;
@@ -132,6 +146,22 @@ BOOL CloseHandle(HANDLE hObject)
 		{
 			close(pipe->fd);
 		}
+
+		free(Object);
+
+		return TRUE;
+	}
+	else if (Type == HANDLE_TYPE_NAMED_PIPE)
+	{
+		WINPR_NAMED_PIPE* pipe;
+
+		pipe = (WINPR_NAMED_PIPE*) Object;
+
+		if (pipe->clientfd != -1)
+			close(pipe->clientfd);
+
+		if (pipe->serverfd != -1)
+			close(pipe->serverfd);
 
 		free(Object);
 

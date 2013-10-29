@@ -22,6 +22,8 @@
 #include "config.h"
 #endif
 
+#include <assert.h>
+
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
@@ -789,6 +791,20 @@ int _xf_error_handler(Display* d, XErrorEvent* ev)
 	return xf_error_handler(d, ev);
 }
 
+static void xf_post_disconnect(freerdp *instance)
+{
+	xfContext* xfc = (xfContext*) instance->context;
+
+	assert(NULL != instance);
+	assert(NULL != xfc);
+	assert(NULL != instance->settings);
+
+	WaitForSingleObject(xfc->mutex, INFINITE);
+	CloseHandle(xfc->mutex);
+
+	xf_monitors_free(xfc, instance->settings);
+}
+
 /**
  * Callback given to freerdp_connect() to process the pre-connect operations.
  * It will fill the rdp_freerdp structure (instance) with the appropriate options to use for the connection.
@@ -806,7 +822,6 @@ BOOL xf_pre_connect(freerdp* instance)
 	xfContext* xfc = (xfContext*) instance->context;
 
 	xfc->mutex = CreateMutex(NULL, FALSE, NULL);
-
 	xfc->settings = instance->settings;
 	xfc->instance = instance;
 
@@ -829,12 +844,12 @@ BOOL xf_pre_connect(freerdp* instance)
 		if (settings->Username == NULL)
 		{
 			fprintf(stderr, "--authonly, but no -u username. Please provide one.\n");
-			exit(1);
+			return FALSE;
 		}
 		if (settings->Password == NULL)
 		{
 			fprintf(stderr, "--authonly, but no -p password. Please provide one.\n");
-			exit(1);
+			return FALSE;
 		}
 		fprintf(stderr, "%s:%d: Authentication only. Don't connect to X.\n", __FILE__, __LINE__);
 		/* Avoid XWindows initialization and configuration below. */
@@ -964,7 +979,7 @@ BOOL xf_post_connect(freerdp* instance)
 
 		if (instance->settings->RemoteFxCodec)
 		{
-			rfx_context = (void*) rfx_context_new();
+			rfx_context = (void*) rfx_context_new(FALSE);
 			xfc->rfx_context = rfx_context;
 		}
 
@@ -1280,6 +1295,8 @@ void* xf_update_thread(void* arg)
 	wMessageQueue* queue;
 	freerdp* instance = (freerdp*) arg;
 
+	assert( NULL != instance);
+
 	status = 1;
 	queue = freerdp_get_message_queue(instance, FREERDP_UPDATE_MESSAGE_QUEUE);
 
@@ -1297,6 +1314,7 @@ void* xf_update_thread(void* arg)
 			break;
 	}
 
+	ExitThread(0);
 	return NULL;
 }
 
@@ -1309,9 +1327,12 @@ void* xf_input_thread(void* arg)
 	int pending_status = 1;
 	int process_status = 1;
 	freerdp* instance = (freerdp*) arg;
+	assert(NULL != instance);
 
 	xfc = (xfContext*) instance->context;
+	assert(NULL != xfc);
 
+	queue = freerdp_get_message_queue(instance, FREERDP_INPUT_MESSAGE_QUEUE);
 	event = CreateFileDescriptorEvent(NULL, FALSE, FALSE, xfc->xfds);
 
 	while (WaitForSingleObject(event, INFINITE) == WAIT_OBJECT_0)
@@ -1344,9 +1365,8 @@ void* xf_input_thread(void* arg)
 			break;
 	}
 
-	queue = freerdp_get_message_queue(instance, FREERDP_INPUT_MESSAGE_QUEUE);
 	MessageQueue_PostQuit(queue, 0);
-
+	ExitThread(0);
 	return NULL;
 }
 
@@ -1357,8 +1377,10 @@ void* xf_channels_thread(void* arg)
 	HANDLE event;
 	rdpChannels* channels;
 	freerdp* instance = (freerdp*) arg;
+	assert(NULL != instance);
 
 	xfc = (xfContext*) instance->context;
+	assert(NULL != xfc);
 
 	channels = instance->context->channels;
 	event = freerdp_channels_get_event_handle(instance);
@@ -1366,9 +1388,13 @@ void* xf_channels_thread(void* arg)
 	while (WaitForSingleObject(event, INFINITE) == WAIT_OBJECT_0)
 	{
 		status = freerdp_channels_process_pending_messages(instance);
+		if (!status)
+			break;
+
 		xf_process_channel_event(channels, instance);
 	}
 
+	ExitThread(0);
 	return NULL;
 }
 
@@ -1412,6 +1438,7 @@ void* xf_thread(void* param)
 	input_event = NULL;
 
 	instance = (freerdp*) param;
+	assert(NULL != instance);
 
 	ZeroMemory(rfds, sizeof(rfds));
 	ZeroMemory(wfds, sizeof(wfds));
@@ -1420,13 +1447,14 @@ void* xf_thread(void* param)
 	status = freerdp_connect(instance);
 
 	xfc = (xfContext*) instance->context;
+	assert(NULL != xfc);
 
 	/* Connection succeeded. --authonly ? */
 	if (instance->settings->AuthenticationOnly)
 	{
 		freerdp_disconnect(instance);
 		fprintf(stderr, "%s:%d: Authentication only, exit status %d\n", __FILE__, __LINE__, !status);
-		exit(!status);
+		ExitThread(exit_code);
 	}
 
 	if (!status)
@@ -1463,8 +1491,14 @@ void* xf_thread(void* param)
 		rcount = 0;
 		wcount = 0;
 
+		/*
+		 * win8 and server 2k12 seem to have some timing issue/race condition
+		 * when a initial sync request is send to sync the keyboard inidcators
+		 * sending the sync event twice fixed this problem
+		 */
 		if (freerdp_focus_required(instance))
 		{
+			xf_kbd_focus_in(xfc);
 			xf_kbd_focus_in(xfc);
 		}
 
@@ -1583,12 +1617,30 @@ void* xf_thread(void* param)
 		}
 	}
 
+	/* Close the channels first. This will signal the internal message pipes
+	 * that the threads should quit. */
+	freerdp_channels_close(channels, instance);
+
 	if (async_update)
 	{
 		wMessageQueue* update_queue = freerdp_get_message_queue(instance, FREERDP_UPDATE_MESSAGE_QUEUE);
 		MessageQueue_PostQuit(update_queue, 0);
 		WaitForSingleObject(update_thread, INFINITE);
 		CloseHandle(update_thread);
+	}
+
+	if (async_input)
+	{
+		wMessageQueue* input_queue = freerdp_get_message_queue(instance, FREERDP_INPUT_MESSAGE_QUEUE);
+		MessageQueue_PostQuit(input_queue, 0);
+		WaitForSingleObject(input_thread, INFINITE);
+		CloseHandle(input_thread);
+	}
+
+	if (async_channels)
+	{
+		WaitForSingleObject(channels_thread, INFINITE);
+		CloseHandle(channels_thread);
 	}
 
 	FILE* fin = fopen("/tmp/tsmf.tid", "rt");
@@ -1627,7 +1679,6 @@ void* xf_thread(void* param)
 	if (!exit_code)
 		exit_code = freerdp_error_info(instance);
 
-	freerdp_channels_close(channels, instance);
 	freerdp_channels_free(channels);
 	freerdp_disconnect(instance);
 	gdi_free(instance);
@@ -1705,7 +1756,7 @@ void xf_ParamChangeEventHandler(rdpContext* context, ParamChangeEventArgs* e)
 	}
 }
 
-void xf_ScalingFactorChangeEventHandler(rdpContext* context, ScalingFactorChangeEventArgs* e)
+static void xf_ScalingFactorChangeEventHandler(rdpContext* context, ScalingFactorChangeEventArgs* e)
 {
 	xfContext* xfc = (xfContext*) context;
 
@@ -1721,7 +1772,7 @@ void xf_ScalingFactorChangeEventHandler(rdpContext* context, ScalingFactorChange
 	xf_transform_window(xfc);
 
 	{
-		ResizeWindowEventArgs e;
+		ResizeWindowEventArgs ev;
 
 		EventArgsInit(&e, "xfreerdp");
 		e.width = xfc->currentWidth;
@@ -1736,19 +1787,19 @@ void xf_ScalingFactorChangeEventHandler(rdpContext* context, ScalingFactorChange
  * Client Interface
  */
 
-void xfreerdp_client_global_init()
+static void xfreerdp_client_global_init()
 {
 	setlocale(LC_ALL, "");
 	freerdp_handle_signals();
 	freerdp_channels_global_init();
 }
 
-void xfreerdp_client_global_uninit()
+static void xfreerdp_client_global_uninit()
 {
 	freerdp_channels_global_uninit();
 }
 
-int xfreerdp_client_start(rdpContext* context)
+static int xfreerdp_client_start(rdpContext* context)
 {
 	xfContext* xfc = (xfContext*) context;
 
@@ -1760,15 +1811,17 @@ int xfreerdp_client_start(rdpContext* context)
 		return -1;
 	}
 
-	xfc->thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) xf_thread, context->instance, 0, NULL);
+	xfc->thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) xf_thread,
+			context->instance, 0, NULL);
 
 	return 0;
 }
 
-int xfreerdp_client_stop(rdpContext* context)
+static int xfreerdp_client_stop(rdpContext* context)
 {
 	xfContext* xfc = (xfContext*) context;
 
+	assert(NULL != context);
 	if (context->settings->AsyncInput)
 	{
 		wMessageQueue* queue;
@@ -1782,10 +1835,16 @@ int xfreerdp_client_stop(rdpContext* context)
 		xfc->disconnect = TRUE;
 	}
 
+	if (xfc->thread)
+	{
+		CloseHandle(xfc->thread);
+		xfc->thread = NULL;
+	}
+
 	return 0;
 }
 
-int xfreerdp_client_new(freerdp* instance, rdpContext* context)
+static int xfreerdp_client_new(freerdp* instance, rdpContext* context)
 {
 	xfContext* xfc;
 	rdpSettings* settings;
@@ -1794,6 +1853,7 @@ int xfreerdp_client_new(freerdp* instance, rdpContext* context)
 
 	instance->PreConnect = xf_pre_connect;
 	instance->PostConnect = xf_post_connect;
+	instance->PostDisconnect = xf_post_disconnect;
 	instance->Authenticate = xf_authenticate;
 	instance->VerifyCertificate = xf_verify_certificate;
 	instance->LogonErrorInfo = xf_logon_error_info;
@@ -1845,7 +1905,7 @@ int xfreerdp_client_new(freerdp* instance, rdpContext* context)
 	return 0;
 }
 
-void xfreerdp_client_free(freerdp* instance, rdpContext* context)
+static void xfreerdp_client_free(freerdp* instance, rdpContext* context)
 {
 	xfContext* xfc = (xfContext*) context;
 

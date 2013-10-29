@@ -23,8 +23,10 @@
 
 #include <freerdp/client.h>
 
+#include <freerdp/addin.h>
 #include <freerdp/client/file.h>
 #include <freerdp/client/cmdline.h>
+#include <freerdp/client/channels.h>
 
 int freerdp_client_common_new(freerdp* instance, rdpContext* context)
 {
@@ -59,6 +61,8 @@ rdpContext* freerdp_client_context_new(RDP_CLIENT_ENTRY_POINTS* pEntryPoints)
 	context->instance = instance;
 	context->settings = instance->settings;
 
+	freerdp_register_addin_provider(freerdp_channels_load_static_addin_entry, 0);
+
 	return context;
 }
 
@@ -66,6 +70,7 @@ void freerdp_client_context_free(rdpContext* context)
 {
 	freerdp* instance = context->instance;
 
+	free(instance->pClientEntryPoints);
 	freerdp_context_free(instance);
 	freerdp_free(instance);
 }
@@ -112,7 +117,7 @@ int freerdp_client_parse_command_line(rdpContext* context, int argc, char** argv
 
 	if (settings->ConnectionFile)
 	{
-        return freerdp_client_parse_connection_file(context, settings->ConnectionFile);
+		status = freerdp_client_parse_connection_file(context, settings->ConnectionFile);
 	}
 
 	return status;
@@ -133,35 +138,37 @@ int freerdp_client_parse_connection_file(rdpContext* context, const char* filena
 int freerdp_client_parse_connection_file_buffer(rdpContext* context, BYTE* buffer, size_t size)
 {
 	rdpFile* file;
-    int status = -1;
+	int status = -1;
 
 	file = freerdp_client_rdp_file_new();
-    if (freerdp_client_parse_rdp_file_buffer(file, buffer, size)
-        && freerdp_client_populate_settings_from_rdp_file(file, context->settings))
-    {
-        status = 0;
-    }
+
+	if (freerdp_client_parse_rdp_file_buffer(file, buffer, size)
+			&& freerdp_client_populate_settings_from_rdp_file(file, context->settings))
+	{
+		status = 0;
+	}
 
 	freerdp_client_rdp_file_free(file);
 
-    return status;
+	return status;
 }
 
 int freerdp_client_write_connection_file(rdpContext* context, const char* filename, BOOL unicode)
 {
-    rdpFile* file;
-    int status = -1;
+	rdpFile* file;
+	int status = -1;
 
-    file = freerdp_client_rdp_file_new();
-    if (freerdp_client_populate_rdp_file_from_settings(file, context->settings))
-    {
-        if (freerdp_client_write_rdp_file(file, filename, unicode))
-        {
-            status = 0;
-        }
-    }
+	file = freerdp_client_rdp_file_new();
 
-    freerdp_client_rdp_file_free(file);
+	if (freerdp_client_populate_rdp_file_from_settings(file, context->settings))
+	{
+		if (freerdp_client_write_rdp_file(file, filename, unicode))
+		{
+			status = 0;
+		}
+	}
 
-    return status;
+	freerdp_client_rdp_file_free(file);
+
+	return status;
 }

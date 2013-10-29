@@ -9,8 +9,11 @@ set(${MODULE_PREFIX}_TESTS
 	TestPrint.c
 	TestPubSub.c
 	TestArrayList.c
+	TestLinkedList.c
 	TestListDictionary.c
 	TestCmdLine.c
+	TestWLog.c
+	TestBufferPool.c
 	TestStreamPool.c
 	TestMessageQueue.c
 	TestMessagePipe.c)

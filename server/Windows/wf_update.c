@@ -138,7 +138,7 @@ void wf_update_encode(wfInfo* wfi)
 	rfx_compose_message(wfi->rfx_context, wfi->s, &rect, 1,
 		pDataBits, width, height, stride);
 
-	wfi->frame_idx = wfi->rfx_context->frame_idx;
+	wfi->frame_idx = wfi->rfx_context->frameIdx;
 
 	cmd->destLeft = wfi->invalid.left;
 	cmd->destTop = wfi->invalid.top;
@@ -198,7 +198,7 @@ void wf_update_encoder_reset(wfInfo* wfi)
 		}
 		else
 		{
-			wfi->rfx_context = rfx_context_new();
+			wfi->rfx_context = rfx_context_new(TRUE);
 			wfi->rfx_context->mode = RLGR3;
 			wfi->rfx_context->width = wfi->servscreen_width;
 			wfi->rfx_context->height = wfi->servscreen_height;

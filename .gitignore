@@ -12,9 +12,17 @@ cmake_install.cmake
 CPackConfig.cmake
 CPackSourceConfig.cmake
 DartConfiguration.tcl
+CMakeCPackOptions.cmake
 _CPack_Packages
+LICENSE.txt
 external/*
 !external/README
+
+*.a.objlist.cmake
+*.a.objlist
+*.a.objdir
+*_dummy.c
+*_dummy.c.base
 
 # Packages
 *.zip
@@ -22,6 +30,7 @@ external/*
 *.sh
 *.deb
 *.rpm
+*.dmg
 *.tar.Z
 *.tar.gz
 
@@ -37,6 +46,9 @@ external/*
 # Documentation
 docs/api
 client/X11/xfreerdp.1
+client/X11/xfreerdp.1.xml
+client/X11/xfreerdp-channels.1.xml
+client/X11/xfreerdp-examples.1.xml
 
 # Mac OS X
 .DS_Store
@@ -62,6 +74,14 @@ Thumbs.db
 ipch
 Debug
 RelWithDebInfo
+*.lib
+*.exp
+*.pdb
+*.dll
+*.ilk
+*.resource.txt
+*.embed.manifest*
+*.intermediate.manifest*
 
 # Binaries
 *.a

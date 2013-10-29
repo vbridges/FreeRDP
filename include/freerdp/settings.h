@@ -797,7 +797,8 @@ struct rdp_settings
 	ALIGN64 DWORD ServerRandomLength; /* 197 */
 	ALIGN64 BYTE* ServerCertificate; /* 198 */
 	ALIGN64 DWORD ServerCertificateLength; /* 199 */
-	UINT64 padding0256[256 - 200]; /* 200 */
+	ALIGN64 BYTE* ClientRandom; /* 200 */
+	UINT64 padding0256[256 - 201]; /* 201 */
 
 	/* Client Network Data */
 	ALIGN64 UINT32 ChannelCount; /* 256 */
@@ -872,7 +873,8 @@ struct rdp_settings
 	ALIGN64 UINT32 AutoReconnectMaxRetries; /* 833 */
 	ALIGN64 ARC_CS_PRIVATE_PACKET* ClientAutoReconnectCookie; /* 834 */
 	ALIGN64 ARC_SC_PRIVATE_PACKET* ServerAutoReconnectCookie; /* 835 */
-	UINT64 padding0896[896 - 835]; /* 835 */
+	ALIGN64 BOOL PrintReconnectCookie; /* 836 */
+	UINT64 padding0896[896 - 837]; /* 837 */
 
 	/* Client Info (Time Zone) */
 	ALIGN64 TIME_ZONE_INFO* ClientTimeZone; /* 896 */
@@ -1050,7 +1052,7 @@ struct rdp_settings
 	ALIGN64 char* RemoteApplicationCmdLine; /* 2118 */
 	ALIGN64 DWORD RemoteApplicationExpandCmdLine; /* 2119 */
 	ALIGN64 DWORD RemoteApplicationExpandWorkingDir; /* 2120 */
-	ALIGN64 DWORD DisableRemoteAppCapsCheck; /* 2121 */
+	ALIGN64 BOOL DisableRemoteAppCapsCheck; /* 2121 */
 	ALIGN64 UINT32 RemoteAppNumIconCaches; /* 2122 */
 	ALIGN64 UINT32 RemoteAppNumIconCacheEntries; /* 2123 */
 	ALIGN64 BOOL RemoteAppLanguageBarSupported; /* 2124 */
@@ -1320,6 +1322,9 @@ FREERDP_API void freerdp_static_channel_collection_free(rdpSettings* settings);
 FREERDP_API void freerdp_dynamic_channel_collection_add(rdpSettings* settings, ADDIN_ARGV* channel);
 FREERDP_API ADDIN_ARGV* freerdp_dynamic_channel_collection_find(rdpSettings* settings, const char* name);
 FREERDP_API void freerdp_dynamic_channel_collection_free(rdpSettings* settings);
+
+FREERDP_API void freerdp_performance_flags_make(rdpSettings* settings);
+FREERDP_API void freerdp_performance_flags_split(rdpSettings* settings);
 
 FREERDP_API BOOL freerdp_get_param_bool(rdpSettings* settings, int id);
 FREERDP_API int freerdp_set_param_bool(rdpSettings* settings, int id, BOOL param);

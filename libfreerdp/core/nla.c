@@ -137,8 +137,18 @@ int credssp_ntlm_client_init(rdpCredssp* credssp)
 		(char*) credssp->identity.User, (char*) credssp->identity.Domain, (char*) credssp->identity.Password);
 #endif
 
-	sspi_SecBufferAlloc(&credssp->PublicKey, credssp->transport->TlsIn->PublicKeyLength);
-	CopyMemory(credssp->PublicKey.pvBuffer, credssp->transport->TlsIn->PublicKey, credssp->transport->TlsIn->PublicKeyLength);
+	rdpTls *tls = NULL;
+	if(credssp->transport->layer == TRANSPORT_LAYER_TLS) {
+		tls = credssp->transport->TlsIn;
+	} else if(credssp->transport->layer == TRANSPORT_LAYER_TSG_TLS) {
+		tls = credssp->transport->TsgTls;
+	} else {
+		fprintf(stderr, "Unknown NLA transport layer\n");
+		return 0;
+	}
+
+	sspi_SecBufferAlloc(&credssp->PublicKey, tls->PublicKeyLength);
+	CopyMemory(credssp->PublicKey.pvBuffer, tls->PublicKey, tls->PublicKeyLength);
 
 	length = sizeof(TERMSRV_SPN_PREFIX) + strlen(settings->ServerHostname);
 
@@ -718,7 +728,7 @@ SECURITY_STATUS credssp_decrypt_public_key_echo(rdpCredssp* credssp)
 {
 	int length;
 	BYTE* buffer;
-	ULONG pfQOP;
+	ULONG pfQOP = 0;
 	BYTE* public_key1;
 	BYTE* public_key2;
 	int public_key_length;
@@ -1145,7 +1155,10 @@ int credssp_recv(rdpCredssp* credssp)
 	if(!ber_read_sequence_tag(s, &length) ||
 		!ber_read_contextual_tag(s, 0, &length, TRUE) ||
 		!ber_read_integer(s, &version))
+	{
+		Stream_Free(s, TRUE);
 		return -1;
+	}
 
 	/* [1] negoTokens (NegoData) */
 	if (ber_read_contextual_tag(s, 1, &length, TRUE) != FALSE)
@@ -1155,7 +1168,10 @@ int credssp_recv(rdpCredssp* credssp)
 			!ber_read_contextual_tag(s, 0, &length, TRUE) || /* [0] negoToken */
 			!ber_read_octet_string_tag(s, &length) || /* OCTET STRING */
 			Stream_GetRemainingLength(s) < length)
+		{
+			Stream_Free(s, TRUE);
 			return -1;
+		}
 		sspi_SecBufferAlloc(&credssp->negoToken, length);
 		Stream_Read(s, credssp->negoToken.pvBuffer, length);
 		credssp->negoToken.cbBuffer = length;
@@ -1166,7 +1182,10 @@ int credssp_recv(rdpCredssp* credssp)
 	{
 		if(!ber_read_octet_string_tag(s, &length) || /* OCTET STRING */
 			Stream_GetRemainingLength(s) < length)
+		{
+			Stream_Free(s, TRUE);
 			return -1;
+		}
 		sspi_SecBufferAlloc(&credssp->authInfo, length);
 		Stream_Read(s, credssp->authInfo.pvBuffer, length);
 		credssp->authInfo.cbBuffer = length;
@@ -1177,7 +1196,10 @@ int credssp_recv(rdpCredssp* credssp)
 	{
 		if(!ber_read_octet_string_tag(s, &length) || /* OCTET STRING */
 			Stream_GetRemainingLength(s) < length)
+		{
+			Stream_Free(s, TRUE);
 			return -1;
+		}
 		sspi_SecBufferAlloc(&credssp->pubKeyAuth, length);
 		Stream_Read(s, credssp->pubKeyAuth.pvBuffer, length);
 		credssp->pubKeyAuth.cbBuffer = length;
