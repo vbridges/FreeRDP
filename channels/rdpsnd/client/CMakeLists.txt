@@ -44,7 +44,7 @@ if(WITH_ALSA)
 endif()
 
 if(WITH_IOSAUDIO)
-	add_channel_client_subsystem($(MODULE_PREFIX) ${CHANNEL_NAME} "ios" "")
+	add_channel_client_subsystem(${MODULE_PREFIX} ${CHANNEL_NAME} "ios" "")
 endif()
 
 if(WITH_PULSE)
