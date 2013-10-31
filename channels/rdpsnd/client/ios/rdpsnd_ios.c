@@ -34,7 +34,7 @@
 #include "rdpsnd_main.h"
 #include "TPCircularBuffer.h"
 
-#define INPUT_BUFFER_SIZE       32768
+#define INPUT_BUFFER_SIZE       32768//1048576
 #define CIRCULAR_BUFFER_SIZE    (INPUT_BUFFER_SIZE * 4)
 
 int bytesPerFrame;
@@ -203,6 +203,14 @@ static void rdpsnd_ios_start(rdpsndDevicePlugin* device)
 			p->is_playing = 1;
 			AudioOutputUnitStart(p->audio_unit);
 		}
+		else
+		{
+			printf("[!!!] start: availably bytes = %d\n", available_bytes);
+		}
+	}
+	else
+	{
+		//printf("[!!!] Start called while playing!\n");
 	}
 }
 
@@ -253,6 +261,7 @@ static void rdpsnd_ios_wave_play(rdpsndDevicePlugin* device, RDPSND_WAVE* wave)
 	const BOOL ok = TPCircularBufferProduceBytes(&p->buffer, data, size);
 	if (!ok)
 	{
+		printf("[!!!] Failed to produce bytes from buffer!\n");
 		return;
 	}
 	
