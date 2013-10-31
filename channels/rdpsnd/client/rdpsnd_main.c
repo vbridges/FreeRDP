@@ -83,7 +83,6 @@ struct rdpsnd_plugin
 	rdpsndDevicePlugin* device;
 };
 
-static void rdpsnd_send_wave_confirm_pdu(rdpsndPlugin* rdpsnd, UINT16 wTimeStamp, BYTE cConfirmedBlockNo);
 
 static void* rdpsnd_schedule_thread(void* arg)
 {
