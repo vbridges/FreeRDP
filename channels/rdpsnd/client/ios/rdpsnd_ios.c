@@ -116,6 +116,8 @@ static OSStatus rdpsnd_ios_monitor_cb(
 			peek = Queue_Dequeue(waveQ);
 			
 			rdpsnd_send_wave_confirm_pdu(p->device.rdpsnd, peek->remoteTimeStampA + diff, peek->ID);
+			
+			free(peek);
 		}
 		
 	}
