@@ -57,7 +57,7 @@ typedef struct rdpsnd_ios_plugin
 	rdpsndDevicePlugin device;
 	AudioComponentInstance audio_unit;
 	TPCircularBuffer buffer;
-	pthread_mutex_t bMutex;
+	//pthread_mutex_t bMutex;
 	pthread_mutex_t playMutex;
 	BOOL is_opened;
 	BOOL is_playing;
@@ -179,7 +179,7 @@ static OSStatus rdpsnd_ios_render_cb(
 	
 	rdpsndIOSPlugin *p = THIS(inRefCon);
 	
-	pthread_mutex_lock(&p->bMutex);
+	//pthread_mutex_lock(&p->bMutex);
 	for (i = 0; i < ioData->mNumberBuffers; i++)
 	{
 		AudioBuffer* target_buffer = &ioData->mBuffers[i];
@@ -201,9 +201,11 @@ static OSStatus rdpsnd_ios_render_cb(
 			AudioOutputUnitStop(p->audio_unit);
 			//p->is_playing = 0;
 			rdpsnd_set_isPlaying(p, FALSE);
+			
+			printf("Buffer is empty (uderrun)\n");
 		}
 	}
-	pthread_mutex_unlock(&p->bMutex);
+	//pthread_mutex_unlock(&p->bMutex);
 	
 	return noErr;
 }
@@ -235,9 +237,9 @@ static void rdpsnd_ios_start(rdpsndDevicePlugin* device)
 	{
 		/* Start the device. */
 		int32_t available_bytes = 0;
-		pthread_mutex_lock(&p->bMutex);
+		//pthread_mutex_lock(&p->bMutex);
 		TPCircularBufferTail(&p->buffer, &available_bytes);
-		pthread_mutex_unlock(&p->bMutex);
+		//pthread_mutex_unlock(&p->bMutex);
 		
 		if (available_bytes > 0)
 		{
@@ -270,9 +272,9 @@ static void rdpsnd_ios_stop(rdpsndDevicePlugin* __unused device)
 		rdpsnd_set_isPlaying(p, FALSE);
 		
 		/* Free all buffers. */
-		pthread_mutex_lock(&p->bMutex);
+		//pthread_mutex_lock(&p->bMutex);
 		TPCircularBufferClear(&p->buffer);
-		pthread_mutex_unlock(&p->bMutex);
+		//pthread_mutex_unlock(&p->bMutex);
 	}
 }
 
@@ -304,9 +306,9 @@ static void rdpsnd_ios_wave_play(rdpsndDevicePlugin* device, RDPSND_WAVE* wave)
 	data = wave->data;
 	size = wave->length;
 	
-	pthread_mutex_lock(&p->bMutex);
+	//pthread_mutex_lock(&p->bMutex);
 	const BOOL ok = TPCircularBufferProduceBytes(&p->buffer, data, size);
-	pthread_mutex_unlock(&p->bMutex);
+	//pthread_mutex_unlock(&p->bMutex);
 	if (!ok)
 	{
 		printf("[!!!] Failed to produce bytes from buffer!\n");
@@ -404,7 +406,7 @@ static void rdpsnd_ios_open(rdpsndDevicePlugin* device, AUDIO_FORMAT* format, in
 		return;
 	}
 	
-	//fake callback
+	//monitor callback
 	status = AudioUnitAddRenderNotify(p->audio_unit, rdpsnd_ios_monitor_cb, p);
 	if (status != 0)
 	{
@@ -436,7 +438,7 @@ static void rdpsnd_ios_open(rdpsndDevicePlugin* device, AUDIO_FORMAT* format, in
 	
 	p->is_opened = 1;
 	
-	pthread_mutex_init(&p->bMutex, NULL);
+	//pthread_mutex_init(&p->bMutex, NULL);
 	pthread_mutex_init(&p->playMutex, NULL);
 	
 	frameCnt = 0;
