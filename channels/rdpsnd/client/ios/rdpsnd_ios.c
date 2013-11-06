@@ -106,7 +106,8 @@ static OSStatus rdpsnd_ios_monitor_cb(
 	
 	rdpsndIOSPlugin *p = THIS(inRefCon);
 	
-	if ( *ioActionFlags == kAudioUnitRenderAction_PostRender )
+	//if ( *ioActionFlags == kAudioUnitRenderAction_PostRender )
+	if ( *ioActionFlags == kAudioUnitRenderAction_PreRender )
 	{
 		int targetFrames;
 		waveItem* peek;
