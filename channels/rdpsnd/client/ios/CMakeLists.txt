@@ -17,8 +17,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-message(STATUS "ios cmake")
-
 define_channel_client_subsystem("rdpsnd" "ios" "")
 
 FIND_LIBRARY(CORE_AUDIO CoreAudio)
@@ -27,7 +25,8 @@ FIND_LIBRARY(CORE_FOUNDATION CoreFoundation)
 
 set(${MODULE_PREFIX}_SRCS
 	rdpsnd_ios.c
-	TPCircularBuffer.c)
+	TPCircularBuffer.c
+	TPCircularBuffer.h)
 
 include_directories(..)
 
