@@ -16,8 +16,9 @@
 # limitations under the License.
 project(iFreeRDP)
 
-set(MODULE_NAME "iFreeRDP")
-set(MODULE_PREFIX "IFREERDP_CLIENT")
+#set(MODULE_NAME "iFreeRDP")
+set(MODULE_NAME "VERDEMobileClient")
+set(MODULE_PREFIX "VERDE_CLIENT")
 set(APP_TYPE MACOSX_BUNDLE)
 
 set(IOS_CLIENT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
