@@ -37,7 +37,7 @@
 #include "rdpsnd_main.h"
 #include "TPCircularBuffer.h"
 
-#define INPUT_BUFFER_SIZE       32768//1048576
+#define INPUT_BUFFER_SIZE       1048576//32768
 #define CIRCULAR_BUFFER_SIZE    (INPUT_BUFFER_SIZE * 4)
 
 int bytesPerFrame;
@@ -108,7 +108,7 @@ static OSStatus rdpsnd_ios_monitor_cb(
 	rdpsndIOSPlugin *p = THIS(inRefCon);
 	
 	//if ( *ioActionFlags == kAudioUnitRenderAction_PostRender )
-	if ( *ioActionFlags == kAudioUnitRenderAction_PreRender )
+	if ( *ioActionFlags == kAudioUnitRenderAction_PostRender )
 	{
 		int targetFrames;
 		waveItem* peek;
@@ -134,6 +134,7 @@ static OSStatus rdpsnd_ios_monitor_cb(
 		
 		
 		targetFrames = peek->numFrames;
+		printf("Played %d/%d frames\n", frameCnt, targetFrames);
 		
 		if (frameCnt >= targetFrames)
 		{
@@ -143,15 +144,17 @@ static OSStatus rdpsnd_ios_monitor_cb(
 			tB = (UINT16)GetTickCount();
 			diff = tB - peek->localTimeStampA;
 			
-			/*printf("\tSend Confirm for %02X with timeStamp diff %d\n"
-			 , peek->ID,
-			 diff);*/
 			frameCnt = frameCnt - peek->numFrames;
 			
 			peek = Queue_Dequeue(waveQ);
 			
 			rdpsnd_send_wave_confirm_pdu(p->device.rdpsnd, peek->remoteTimeStampA + diff, peek->ID);
 			//printf("confirm with latency:%d\n", diff);
+			
+			printf("\tSend Confirm for %02X with timeStamp diff %d (qCount=%d)\n"
+			       , peek->ID,
+			       diff,
+			       Queue_Count(waveQ));
 			
 			free(peek);
 		}
@@ -181,9 +184,12 @@ static OSStatus rdpsnd_ios_render_cb(
 	
 	rdpsndIOSPlugin *p = THIS(inRefCon);
 	
+	printf("Playing %d frames... ", (unsigned int)inNumberFrames);
+	
 	//pthread_mutex_lock(&p->bMutex);
 	for (i = 0; i < ioData->mNumberBuffers; i++)
 	{
+		printf("buf%d ", i);
 		AudioBuffer* target_buffer = &ioData->mBuffers[i];
 		
 		int32_t available_bytes = 0;
@@ -325,13 +331,15 @@ static void rdpsnd_ios_wave_play(rdpsndDevicePlugin* device, RDPSND_WAVE* wave)
 	wi->remoteTimeStampA = wave->wTimeStampA;
 	wi->numFrames = size/bytesPerFrame;
 	
-	/*printf("Enqueue: waveItem[id:%02X localA:%d remoteA:%d frames:%d]\n",
-	 wi->ID,
-	 wi->localTimeStampA,
-	 wi->remoteTimeStampA,
-	 wi->numFrames);*/
-	
 	Queue_Enqueue(waveQ, wi);
+	
+	
+	printf("Enqueue: waveItem[id:%02X localA:%d remoteA:%d frames:%d] count = %d\n",
+	       wi->ID,
+	       wi->localTimeStampA,
+	       wi->remoteTimeStampA,
+	       wi->numFrames,
+	       Queue_Count(waveQ));
 	
 	
 	rdpsnd_ios_start(device);
