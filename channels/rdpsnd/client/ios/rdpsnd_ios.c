@@ -123,7 +123,6 @@ static OSStatus rdpsnd_ios_monitor_cb(
 		 */
 		
 		
-		frameCnt += inNumberFrames;
 		
 		peek = Queue_Peek(waveQ);
 		if (!peek)
@@ -202,6 +201,8 @@ static OSStatus rdpsnd_ios_render_cb(
 			target_buffer->mDataByteSize = bytes_to_copy;
 			
 			TPCircularBufferConsume(&p->buffer, bytes_to_copy);
+			
+			frameCnt += inNumberFrames;
 		}
 		else
 		{
@@ -215,15 +216,40 @@ static OSStatus rdpsnd_ios_render_cb(
 	}
 	//pthread_mutex_unlock(&p->bMutex);
 	
+	
 	return noErr;
 }
 
 static BOOL rdpsnd_ios_format_supported(rdpsndDevicePlugin* __unused device, AUDIO_FORMAT* format)
 {
+	//printf("format 0x%X\n", format->wFormatTag);
 	if (format->wFormatTag == WAVE_FORMAT_PCM)
 	{
 		return 1;
 	}
+	
+	if (format->wFormatTag == WAVE_FORMAT_DVI_ADPCM)
+	{
+		return 1;
+	}
+	
+	if (format->wFormatTag == WAVE_FORMAT_ALAW)
+	{
+		return 1;
+	}
+	
+	if (format->wFormatTag == WAVE_FORMAT_MULAW)
+	{
+		return 1;
+	}
+	
+	if (format->wFormatTag == WAVE_FORMAT_GSM610)
+	{
+		return 0;
+	}
+	
+	
+	
 	return 0;
 }
 
@@ -238,7 +264,7 @@ static void rdpsnd_ios_set_volume(rdpsndDevicePlugin* __unused device, UINT32 __
 static void rdpsnd_ios_start(rdpsndDevicePlugin* device)
 {
 	rdpsndIOSPlugin *p = THIS(device);
-	
+	//printf("---->>>>> snd start\n");
 	/* If this device is not playing... */
 	//if (!p->is_playing)
 	if ( rdpsnd_isPlaying(p) == FALSE )
@@ -269,7 +295,7 @@ static void rdpsnd_ios_start(rdpsndDevicePlugin* device)
 static void rdpsnd_ios_stop(rdpsndDevicePlugin* __unused device)
 {
 	rdpsndIOSPlugin *p = THIS(device);
-	
+	//printf("<<<<---- snd stop\n");
 	/* If the device is playing... */
 	//if (p->is_playing)
 	if (rdpsnd_isPlaying(p) == TRUE)
@@ -314,6 +340,9 @@ static void rdpsnd_ios_wave_play(rdpsndDevicePlugin* device, RDPSND_WAVE* wave)
 	data = wave->data;
 	size = wave->length;
 	
+	printf("play: %d (%d frames)\n", size, size/bytesPerFrame);
+
+	
 	//pthread_mutex_lock(&p->bMutex);
 	const BOOL ok = TPCircularBufferProduceBytes(&p->buffer, data, size);
 	//pthread_mutex_unlock(&p->bMutex);
@@ -323,8 +352,7 @@ static void rdpsnd_ios_wave_play(rdpsndDevicePlugin* device, RDPSND_WAVE* wave)
 		return;
 	}
 	
-	//printf("play: %d (%d frames)\n", size, size/bytesPerFrame);
-	
+		
 	wi = malloc(sizeof(waveItem));
 	wi->ID = wave->cBlockNo;
 	wi->localTimeStampA = wave->wLocalTimeA;
@@ -371,17 +399,102 @@ static void rdpsnd_ios_open(rdpsndDevicePlugin* device, AUDIO_FORMAT* format, in
 	if (status != 0) return;
 	
 	/* Set the format for the AudioUnit. */
+	/*
 	AudioStreamBasicDescription audioFormat = {0};
 	audioFormat.mSampleRate       = format->nSamplesPerSec;
 	audioFormat.mFormatID         = kAudioFormatLinearPCM;
 	audioFormat.mFormatFlags      = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
-	audioFormat.mFramesPerPacket  = 1; /* imminent property of the Linear PCM */
+	audioFormat.mFramesPerPacket  = 1; // imminent property of the Linear PCM
 	audioFormat.mChannelsPerFrame = format->nChannels;
 	audioFormat.mBitsPerChannel   = format->wBitsPerSample;
 	audioFormat.mBytesPerFrame    = (format->wBitsPerSample * format->nChannels) / 8;
 	audioFormat.mBytesPerPacket   = audioFormat.mBytesPerFrame * audioFormat.mFramesPerPacket;
 	
 	bytesPerFrame = audioFormat.mBytesPerFrame;
+	*/
+	AudioStreamBasicDescription audioFormat = {0};
+
+	
+	if (format->wFormatTag == WAVE_FORMAT_ALAW )
+	{
+		audioFormat.mSampleRate       = format->nSamplesPerSec;
+		audioFormat.mFormatID         = kAudioFormatALaw;
+		audioFormat.mFormatFlags      = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+		audioFormat.mFramesPerPacket  = 1;
+		audioFormat.mChannelsPerFrame = format->nChannels;
+		audioFormat.mBitsPerChannel   = format->wBitsPerSample;
+		audioFormat.mBytesPerFrame    = format->nBlockAlign;
+		audioFormat.mBytesPerPacket   = format->nBlockAlign;
+		
+		
+		bytesPerFrame = audioFormat.mBytesPerFrame;
+	}
+	else if(format->wFormatTag == WAVE_FORMAT_MULAW)
+	{
+		audioFormat.mSampleRate       = format->nSamplesPerSec;
+		audioFormat.mFormatID         = kAudioFormatULaw;
+		audioFormat.mFormatFlags      = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+		audioFormat.mFramesPerPacket  = 1;
+		audioFormat.mChannelsPerFrame = format->nChannels;
+		audioFormat.mBitsPerChannel   = format->wBitsPerSample;
+		audioFormat.mBytesPerFrame    = format->nBlockAlign;
+		audioFormat.mBytesPerPacket   = format->nBlockAlign;
+		
+		
+		bytesPerFrame = audioFormat.mBytesPerFrame;
+	}
+	
+	else if(format->wFormatTag == WAVE_FORMAT_GSM610)
+	{
+		audioFormat.mSampleRate       = format->nSamplesPerSec;
+		audioFormat.mFormatID         = kAudioFormatMicrosoftGSM;
+		audioFormat.mFormatFlags      = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+		audioFormat.mFramesPerPacket  = 1;
+		audioFormat.mChannelsPerFrame = format->nChannels;
+		audioFormat.mBitsPerChannel   = format->wBitsPerSample;
+		audioFormat.mBytesPerFrame    = 33;
+		audioFormat.mBytesPerPacket   = audioFormat.mBytesPerFrame * audioFormat.mFramesPerPacket;
+		
+		
+		bytesPerFrame = audioFormat.mBytesPerFrame;
+	}
+	
+	else if (format->wFormatTag == WAVE_FORMAT_DVI_ADPCM)
+	{
+		audioFormat.mSampleRate       = format->nSamplesPerSec;
+		audioFormat.mFormatID         = kAudioFormatAppleIMA4;//kAudioFormatDVIIntelIMA;
+		audioFormat.mFormatFlags      = 0;//kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+		audioFormat.mFramesPerPacket  = 64;
+		audioFormat.mChannelsPerFrame = format->nChannels;
+		audioFormat.mBitsPerChannel   = 0;//format->wBitsPerSample;
+		audioFormat.mBytesPerFrame    = (format->wBitsPerSample * format->nChannels) / 8;
+		audioFormat.mBytesPerPacket   = audioFormat.mChannelsPerFrame * 32;
+		
+		bytesPerFrame = audioFormat.mBytesPerFrame;
+	}
+	
+	else if (format->wFormatTag == WAVE_FORMAT_PCM)
+	{
+		audioFormat.mSampleRate       = format->nSamplesPerSec;
+		audioFormat.mFormatID         = kAudioFormatLinearPCM;
+		audioFormat.mFormatFlags      = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+		audioFormat.mFramesPerPacket  = 1; // imminent property of the Linear PCM
+		audioFormat.mChannelsPerFrame = format->nChannels;
+		audioFormat.mBitsPerChannel   = format->wBitsPerSample;
+		audioFormat.mBytesPerFrame    = (format->wBitsPerSample * format->nChannels) / 8;
+		audioFormat.mBytesPerPacket   = audioFormat.mBytesPerFrame * audioFormat.mFramesPerPacket;
+		
+		bytesPerFrame = audioFormat.mBytesPerFrame;
+	}
+	
+	/*printf("initializing with format: ID:%X Rate:%d ch:%d b/s:%d B/f:%d\n",
+	       format->wFormatTag,
+	       format->nSamplesPerSec,
+	       format->nChannels,
+	       format->wBitsPerSample,
+	       (unsigned int)audioFormat.mBytesPerFrame);*/
+	
+	rdpsnd_print_audio_format(format);
 	
 	status = AudioUnitSetProperty(
 				      p->audio_unit,
@@ -392,6 +505,7 @@ static void rdpsnd_ios_open(rdpsndDevicePlugin* device, AUDIO_FORMAT* format, in
 				      sizeof(audioFormat));
 	if (status != 0)
 	{
+		printf("Failed to set AU prop\n");
 		AudioComponentInstanceDispose(p->audio_unit);
 		p->audio_unit = NULL;
 		return;
@@ -411,6 +525,7 @@ static void rdpsnd_ios_open(rdpsndDevicePlugin* device, AUDIO_FORMAT* format, in
 				      sizeof(callbackStruct));
 	if (status != 0)
 	{
+		printf("Failed to set AU callback\n");
 		AudioComponentInstanceDispose(p->audio_unit);
 		p->audio_unit = NULL;
 		return;
@@ -431,6 +546,7 @@ static void rdpsnd_ios_open(rdpsndDevicePlugin* device, AUDIO_FORMAT* format, in
 	status = AudioUnitInitialize(p->audio_unit);
 	if (status != 0)
 	{
+		printf("Failed to init the AU\n");
 		AudioComponentInstanceDispose(p->audio_unit);
 		p->audio_unit = NULL;
 		return;
@@ -440,6 +556,7 @@ static void rdpsnd_ios_open(rdpsndDevicePlugin* device, AUDIO_FORMAT* format, in
 	const BOOL ok = TPCircularBufferInit(&p->buffer, CIRCULAR_BUFFER_SIZE);
 	if (!ok)
 	{
+		printf("Failed to init the TPCircularBuffer\n");
 		AudioUnitUninitialize(p->audio_unit);
 		AudioComponentInstanceDispose(p->audio_unit);
 		p->audio_unit = NULL;

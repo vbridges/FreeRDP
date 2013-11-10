@@ -177,7 +177,7 @@ void rdpsnd_select_supported_audio_formats(rdpsndPlugin* rdpsnd)
 		}
 	}
 
-#if 0
+#if 1
 	fprintf(stderr, "Server ");
 	rdpsnd_print_audio_formats(rdpsnd->ServerFormats, rdpsnd->NumberOfServerFormats);
 	fprintf(stderr, "\n");
