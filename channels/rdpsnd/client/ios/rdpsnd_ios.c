@@ -228,11 +228,6 @@ static BOOL rdpsnd_ios_format_supported(rdpsndDevicePlugin* __unused device, AUD
 		return 1;
 	}
 	
-	if (format->wFormatTag == WAVE_FORMAT_DVI_ADPCM)
-	{
-		return 1;
-	}
-	
 	if (format->wFormatTag == WAVE_FORMAT_ALAW)
 	{
 		return 1;
@@ -243,10 +238,6 @@ static BOOL rdpsnd_ios_format_supported(rdpsndDevicePlugin* __unused device, AUD
 		return 1;
 	}
 	
-	if (format->wFormatTag == WAVE_FORMAT_GSM610)
-	{
-		return 0;
-	}
 	
 	
 	
@@ -423,7 +414,7 @@ static void rdpsnd_ios_open(rdpsndDevicePlugin* device, AUDIO_FORMAT* format, in
 		audioFormat.mFramesPerPacket  = 1;
 		audioFormat.mChannelsPerFrame = format->nChannels;
 		audioFormat.mBitsPerChannel   = format->wBitsPerSample;
-		audioFormat.mBytesPerFrame    = format->nBlockAlign;
+		audioFormat.mBytesPerFrame    = (format->wBitsPerSample * format->nChannels) / 8;;
 		audioFormat.mBytesPerPacket   = format->nBlockAlign;
 		
 		
@@ -437,38 +428,9 @@ static void rdpsnd_ios_open(rdpsndDevicePlugin* device, AUDIO_FORMAT* format, in
 		audioFormat.mFramesPerPacket  = 1;
 		audioFormat.mChannelsPerFrame = format->nChannels;
 		audioFormat.mBitsPerChannel   = format->wBitsPerSample;
-		audioFormat.mBytesPerFrame    = format->nBlockAlign;
+		audioFormat.mBytesPerFrame    = (format->wBitsPerSample * format->nChannels) / 8;
 		audioFormat.mBytesPerPacket   = format->nBlockAlign;
 		
-		
-		bytesPerFrame = audioFormat.mBytesPerFrame;
-	}
-	
-	else if(format->wFormatTag == WAVE_FORMAT_GSM610)
-	{
-		audioFormat.mSampleRate       = format->nSamplesPerSec;
-		audioFormat.mFormatID         = kAudioFormatMicrosoftGSM;
-		audioFormat.mFormatFlags      = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
-		audioFormat.mFramesPerPacket  = 1;
-		audioFormat.mChannelsPerFrame = format->nChannels;
-		audioFormat.mBitsPerChannel   = format->wBitsPerSample;
-		audioFormat.mBytesPerFrame    = 33;
-		audioFormat.mBytesPerPacket   = audioFormat.mBytesPerFrame * audioFormat.mFramesPerPacket;
-		
-		
-		bytesPerFrame = audioFormat.mBytesPerFrame;
-	}
-	
-	else if (format->wFormatTag == WAVE_FORMAT_DVI_ADPCM)
-	{
-		audioFormat.mSampleRate       = format->nSamplesPerSec;
-		audioFormat.mFormatID         = kAudioFormatAppleIMA4;//kAudioFormatDVIIntelIMA;
-		audioFormat.mFormatFlags      = 0;//kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
-		audioFormat.mFramesPerPacket  = 64;
-		audioFormat.mChannelsPerFrame = format->nChannels;
-		audioFormat.mBitsPerChannel   = 0;//format->wBitsPerSample;
-		audioFormat.mBytesPerFrame    = (format->wBitsPerSample * format->nChannels) / 8;
-		audioFormat.mBytesPerPacket   = audioFormat.mChannelsPerFrame * 32;
 		
 		bytesPerFrame = audioFormat.mBytesPerFrame;
 	}
