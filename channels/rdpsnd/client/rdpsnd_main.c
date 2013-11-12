@@ -177,7 +177,7 @@ void rdpsnd_select_supported_audio_formats(rdpsndPlugin* rdpsnd)
 		}
 	}
 
-#if 1
+#if 0
 	fprintf(stderr, "Server ");
 	rdpsnd_print_audio_formats(rdpsnd->ServerFormats, rdpsnd->NumberOfServerFormats);
 	fprintf(stderr, "\n");
@@ -437,8 +437,8 @@ static void rdpsnd_recv_wave_pdu(rdpsndPlugin* rdpsnd, wStream* s)
 	{
 		wave->wTimeStampB = rdpsnd->wTimeStamp + wave->wAudioLength + TIME_DELAY_MS;
 		wave->wLocalTimeB = wave->wLocalTimeA + wave->wAudioLength + TIME_DELAY_MS;
-		rdpsnd->device->WaveConfirm(rdpsnd->device, wave);
 	}
+	//rdpsnd->device->WaveConfirm(rdpsnd->device, wave);
 }
 
 static void rdpsnd_recv_close_pdu(rdpsndPlugin* rdpsnd)

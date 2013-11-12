@@ -37,9 +37,10 @@
 #include "rdpsnd_main.h"
 #include "TPCircularBuffer.h"
 
-#define INPUT_BUFFER_SIZE       1048576//32768
+#define INPUT_BUFFER_SIZE       1048576//32768//
 #define CIRCULAR_BUFFER_SIZE    (INPUT_BUFFER_SIZE * 4)
 
+int bpsAvg;
 int bytesPerFrame;
 int frameCnt;
 wQueue* waveQ;
@@ -95,6 +96,47 @@ void rdpsnd_set_isPlaying(rdpsndIOSPlugin* p, BOOL b)
 	pthread_mutex_unlock(&p->playMutex);
 }
 
+void rdpsnd_count_frames(rdpsndIOSPlugin* p)
+{
+	int targetFrames;
+	waveItem* peek;
+	
+	peek = Queue_Peek(waveQ);
+	if (!peek)
+	{
+		printf("empty waveQ!\n");
+		return;
+	}
+	
+	
+	targetFrames = peek->numFrames;
+	printf("count %d/%d frames\n", frameCnt, targetFrames);
+	
+	if (frameCnt >= targetFrames)
+	{
+		UINT16 tB;
+		UINT16 diff;
+		
+		tB = (UINT16)GetTickCount();
+		diff = tB - peek->localTimeStampA;
+		
+		//frameCnt = frameCnt - peek->numFrames;
+		frameCnt = 0;
+		
+		peek = Queue_Dequeue(waveQ);
+		
+		rdpsnd_send_wave_confirm_pdu(p->device.rdpsnd, peek->remoteTimeStampA + diff, peek->ID);
+		//printf("confirm with latency:%d\n", diff);
+		
+		printf("\tSend Confirm for %02X with timeStamp diff %d (qCount=%d)\n"
+		       , peek->ID,
+		       diff,
+		       Queue_Count(waveQ));
+		
+		free(peek);
+	}
+}
+
 static OSStatus rdpsnd_ios_monitor_cb(
 				      void *inRefCon,
 				      AudioUnitRenderActionFlags *ioActionFlags,
@@ -110,8 +152,7 @@ static OSStatus rdpsnd_ios_monitor_cb(
 	//if ( *ioActionFlags == kAudioUnitRenderAction_PostRender )
 	if ( *ioActionFlags == kAudioUnitRenderAction_PostRender )
 	{
-		int targetFrames;
-		waveItem* peek;
+		
 		
 		/*
 		 printf("postRender Bus: %d inTimeStamp: %llu flags(%d) Frames: %d Buffers: %d\n",
@@ -122,41 +163,9 @@ static OSStatus rdpsnd_ios_monitor_cb(
 		 (unsigned int)ioData->mNumberBuffers);
 		 */
 		
+		printf("Played %d frames ", frameCnt);
 		
-		
-		peek = Queue_Peek(waveQ);
-		if (!peek)
-		{
-			printf("empty waveQ!\n");
-			return noErr;
-		}
-		
-		
-		targetFrames = peek->numFrames;
-		printf("Played %d/%d frames\n", frameCnt, targetFrames);
-		
-		if (frameCnt >= targetFrames)
-		{
-			UINT16 tB;
-			UINT16 diff;
-			
-			tB = (UINT16)GetTickCount();
-			diff = tB - peek->localTimeStampA;
-			
-			frameCnt = frameCnt - peek->numFrames;
-			
-			peek = Queue_Dequeue(waveQ);
-			
-			rdpsnd_send_wave_confirm_pdu(p->device.rdpsnd, peek->remoteTimeStampA + diff, peek->ID);
-			//printf("confirm with latency:%d\n", diff);
-			
-			printf("\tSend Confirm for %02X with timeStamp diff %d (qCount=%d)\n"
-			       , peek->ID,
-			       diff,
-			       Queue_Count(waveQ));
-			
-			free(peek);
-		}
+		rdpsnd_count_frames(p);
 		
 	}
 	
@@ -188,7 +197,10 @@ static OSStatus rdpsnd_ios_render_cb(
 	//pthread_mutex_lock(&p->bMutex);
 	for (i = 0; i < ioData->mNumberBuffers; i++)
 	{
-		printf("buf%d ", i);
+		//printf("buf%d ", i);
+		printf("buf size = %d (%lums) ",
+		       (unsigned int)ioData->mBuffers[i].mDataByteSize,
+		       (ioData->mBuffers[i].mDataByteSize * 1000) / bpsAvg);
 		AudioBuffer* target_buffer = &ioData->mBuffers[i];
 		
 		int32_t available_bytes = 0;
@@ -206,12 +218,22 @@ static OSStatus rdpsnd_ios_render_cb(
 		}
 		else
 		{
+			//FIXME: force sending of any remaining items in queue
+			if (Queue_Count(waveQ) > 0)
+			{
+				frameCnt = 1000000;
+			}
+			
+			//in case we didnt get a post render callback first (observed)
+			rdpsnd_count_frames(p);
+			
+			
 			target_buffer->mDataByteSize = 0;
 			AudioOutputUnitStop(p->audio_unit);
 			//p->is_playing = 0;
 			rdpsnd_set_isPlaying(p, FALSE);
 			
-			printf("Buffer is empty (uderrun)\n");
+			printf("Buffer is empty with frameCnt:%d(uderrun)\n", frameCnt);
 		}
 	}
 	//pthread_mutex_unlock(&p->bMutex);
@@ -331,8 +353,8 @@ static void rdpsnd_ios_wave_play(rdpsndDevicePlugin* device, RDPSND_WAVE* wave)
 	data = wave->data;
 	size = wave->length;
 	
-	printf("play: %d (%d frames)\n", size, size/bytesPerFrame);
-
+	//printf("play: %d (%d frames)\n", size, size/bytesPerFrame);
+	
 	
 	//pthread_mutex_lock(&p->bMutex);
 	const BOOL ok = TPCircularBufferProduceBytes(&p->buffer, data, size);
@@ -343,7 +365,7 @@ static void rdpsnd_ios_wave_play(rdpsndDevicePlugin* device, RDPSND_WAVE* wave)
 		return;
 	}
 	
-		
+	
 	wi = malloc(sizeof(waveItem));
 	wi->ID = wave->cBlockNo;
 	wi->localTimeStampA = wave->wLocalTimeA;
@@ -359,6 +381,10 @@ static void rdpsnd_ios_wave_play(rdpsndDevicePlugin* device, RDPSND_WAVE* wave)
 	       wi->remoteTimeStampA,
 	       wi->numFrames,
 	       Queue_Count(waveQ));
+	
+	int ms = (size * 1000) / (bpsAvg);
+	
+	printf("estimated ms: %d, wave: %d\n", ms, wave->wAudioLength);
 	
 	
 	rdpsnd_ios_start(device);
@@ -391,20 +417,20 @@ static void rdpsnd_ios_open(rdpsndDevicePlugin* device, AUDIO_FORMAT* format, in
 	
 	/* Set the format for the AudioUnit. */
 	/*
+	 AudioStreamBasicDescription audioFormat = {0};
+	 audioFormat.mSampleRate       = format->nSamplesPerSec;
+	 audioFormat.mFormatID         = kAudioFormatLinearPCM;
+	 audioFormat.mFormatFlags      = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+	 audioFormat.mFramesPerPacket  = 1; // imminent property of the Linear PCM
+	 audioFormat.mChannelsPerFrame = format->nChannels;
+	 audioFormat.mBitsPerChannel   = format->wBitsPerSample;
+	 audioFormat.mBytesPerFrame    = (format->wBitsPerSample * format->nChannels) / 8;
+	 audioFormat.mBytesPerPacket   = audioFormat.mBytesPerFrame * audioFormat.mFramesPerPacket;
+	 
+	 bytesPerFrame = audioFormat.mBytesPerFrame;
+	 */
 	AudioStreamBasicDescription audioFormat = {0};
-	audioFormat.mSampleRate       = format->nSamplesPerSec;
-	audioFormat.mFormatID         = kAudioFormatLinearPCM;
-	audioFormat.mFormatFlags      = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
-	audioFormat.mFramesPerPacket  = 1; // imminent property of the Linear PCM
-	audioFormat.mChannelsPerFrame = format->nChannels;
-	audioFormat.mBitsPerChannel   = format->wBitsPerSample;
-	audioFormat.mBytesPerFrame    = (format->wBitsPerSample * format->nChannels) / 8;
-	audioFormat.mBytesPerPacket   = audioFormat.mBytesPerFrame * audioFormat.mFramesPerPacket;
 	
-	bytesPerFrame = audioFormat.mBytesPerFrame;
-	*/
-	AudioStreamBasicDescription audioFormat = {0};
-
 	
 	if (format->wFormatTag == WAVE_FORMAT_ALAW )
 	{
@@ -444,17 +470,19 @@ static void rdpsnd_ios_open(rdpsndDevicePlugin* device, AUDIO_FORMAT* format, in
 		audioFormat.mChannelsPerFrame = format->nChannels;
 		audioFormat.mBitsPerChannel   = format->wBitsPerSample;
 		audioFormat.mBytesPerFrame    = (format->wBitsPerSample * format->nChannels) / 8;
-		audioFormat.mBytesPerPacket   = audioFormat.mBytesPerFrame * audioFormat.mFramesPerPacket;
+		audioFormat.mBytesPerPacket   = format->nBlockAlign;
 		
 		bytesPerFrame = audioFormat.mBytesPerFrame;
 	}
 	
 	/*printf("initializing with format: ID:%X Rate:%d ch:%d b/s:%d B/f:%d\n",
-	       format->wFormatTag,
-	       format->nSamplesPerSec,
-	       format->nChannels,
-	       format->wBitsPerSample,
-	       (unsigned int)audioFormat.mBytesPerFrame);*/
+	 format->wFormatTag,
+	 format->nSamplesPerSec,
+	 format->nChannels,
+	 format->wBitsPerSample,
+	 (unsigned int)audioFormat.mBytesPerFrame);*/
+	
+	bpsAvg = format->nAvgBytesPerSec;
 	
 	rdpsnd_print_audio_format(format);
 	
@@ -532,6 +560,17 @@ static void rdpsnd_ios_open(rdpsndDevicePlugin* device, AUDIO_FORMAT* format, in
 	
 	frameCnt = 0;
 	waveQ = Queue_New(TRUE, 32, 2);
+	
+	Float64 lat64;
+	UInt32 data_size;
+	status = AudioUnitGetProperty(p->audio_unit,
+				      kAudioUnitProperty_Latency,
+				      kAudioUnitScope_Global,
+				      0,
+				      &lat64,
+				      &data_size);
+	
+	printf("au latency: %.06fms\n", lat64);
 }
 
 static void rdpsnd_ios_close(rdpsndDevicePlugin* device)
