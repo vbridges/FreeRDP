@@ -20,14 +20,15 @@
 #import "RDPSession.h"
 #import "Utils.h"
 
+#import <winpr/crt.h>
 
 #pragma mark Connection helpers
 
 static BOOL
 ios_pre_connect(freerdp * instance)
-{	
-	rdpSettings* settings = instance->settings;	
-
+{
+	rdpSettings* settings = instance->settings;
+	
 	settings->AutoLogonEnabled = settings->Password && (strlen(settings->Password) > 0);
 	
 	// Verify screen width/height are sane
@@ -64,60 +65,91 @@ ios_pre_connect(freerdp * instance)
 	settings->OrderSupport[NEG_ELLIPSE_SC_INDEX] = FALSE;
 	settings->OrderSupport[NEG_ELLIPSE_CB_INDEX] = FALSE;
 	
-    settings->FrameAcknowledge = 10;
-
-	char* args[] = {"rdpsnd", "sys:ios"};
+	settings->AsyncUpdate = TRUE;
+	
+	settings->FrameAcknowledge = 2;
+	
+	char* args[] = { "rdpsnd", "sys:ios" };
         
         freerdp_client_add_static_channel(instance->settings, 2, args);
         
         freerdp_client_load_addins(instance->context->channels, instance->settings);
-
+	
 	freerdp_channels_pre_connect(instance->context->channels, instance);
-
+	
 	return TRUE;
 }
 
 static BOOL ios_post_connect(freerdp* instance)
 {
 	mfInfo* mfi = MFI_FROM_INSTANCE(instance);
-
-    instance->context->cache = cache_new(instance->settings);
-    
+	
+	instance->context->cache = cache_new(instance->settings);
+	
 	// Graphics callbacks
 	ios_allocate_display_buffer(mfi);
 	instance->update->BeginPaint = ios_ui_begin_paint;
 	instance->update->EndPaint = ios_ui_end_paint;
 	instance->update->DesktopResize = ios_ui_resize_window;
-		
+	
 	// Channel allocation
 	freerdp_channels_post_connect(instance->context->channels, instance);
-
+	
 	[mfi->session performSelectorOnMainThread:@selector(sessionDidConnect) withObject:nil waitUntilDone:YES];
+	
 	return TRUE;
 }
 
 static int ios_receive_channel_data(freerdp* instance, int channelId, UINT8* data, int size, int flags, int total_size)
 {
-    return freerdp_channels_data(instance, channelId, data, size, flags, total_size);
+	return freerdp_channels_data(instance, channelId, data, size, flags, total_size);
 }
 
 void ios_process_channel_event(rdpChannels* channels, freerdp* instance)
 {
-    wMessage* event = freerdp_channels_pop_event(channels);
-    if (event)
-        freerdp_event_free(event);
+	wMessage* event = freerdp_channels_pop_event(channels);
+	if (event)
+		freerdp_event_free(event);
+}
+
+void* ios_update_thread(void* arg)
+{
+	int status;
+	wMessage message;
+	wMessageQueue* queue;
+	freerdp* instance = (freerdp*) arg;
+	
+	status = 1;
+	queue = freerdp_get_message_queue(instance, FREERDP_UPDATE_MESSAGE_QUEUE);
+	
+	while (MessageQueue_Wait(queue))
+	{
+		while (MessageQueue_Peek(queue, &message, TRUE))
+		{
+			status = freerdp_message_queue_process_message(instance, FREERDP_UPDATE_MESSAGE_QUEUE, &message);
+			
+			if (!status)
+				break;
+		}
+		
+		if (!status)
+			break;
+	}
+	
+	ExitThread(0);
+	return NULL;
 }
 
 #pragma mark -
 #pragma mark Running the connection
 
-int
-ios_run_freerdp(freerdp * instance)
+int ios_run_freerdp(freerdp* instance)
 {
-	mfContext* context = (mfContext*)instance->context;
+	mfContext* context = (mfContext*) instance->context;
 	mfInfo* mfi = context->mfi;
 	rdpChannels* channels = instance->context->channels;
-		
+	rdpSettings* settings = instance->settings;
+	
 	mfi->connection_state = TSXConnectionConnecting;
 	
 	if (!freerdp_connect(instance))
@@ -128,9 +160,9 @@ ios_run_freerdp(freerdp * instance)
 	
 	if (mfi->unwanted)
 		return MF_EXIT_CONN_CANCELED;
-
+	
 	mfi->connection_state = TSXConnectionConnected;
-			
+	
 	// Connection main loop
 	NSAutoreleasePool* pool;
 	int i;
@@ -142,30 +174,36 @@ ios_run_freerdp(freerdp * instance)
 	void* wfds[32];
 	fd_set rfds_set;
 	fd_set wfds_set;
-    struct timeval timeout;
-    int select_status;
+	struct timeval timeout;
+	int select_status;
 	
-	memset(rfds, 0, sizeof(rfds));
-	memset(wfds, 0, sizeof(wfds));
-
+	ZeroMemory(rfds, sizeof(rfds));
+	ZeroMemory(wfds, sizeof(wfds));
+	
+	if (settings->AsyncUpdate)
+        {
+		context->UpdateThread = CreateThread(NULL, 0,
+			(LPTHREAD_START_ROUTINE) ios_update_thread, instance, 0, NULL);
+        }
+	
 	while (!freerdp_shall_disconnect(instance))
 	{
 		rcount = wcount = 0;
 		
 		pool = [[NSAutoreleasePool alloc] init];
-
+		
 		if (freerdp_get_fds(instance, rfds, &rcount, wfds, &wcount) != TRUE)
 		{
 			NSLog(@"%s: inst->rdp_get_fds failed", __func__);
 			break;
 		}
-
+		
 		if (freerdp_channels_get_fds(channels, instance, rfds, &rcount, wfds, &wcount) != TRUE)
 		{
-			NSLog(@"%s: freerdp_chanman_get_fds failed", __func__);
+			NSLog(@"%s: freerdp_channels_get_fds failed", __func__);
 			break;
 		}
-
+		
 		if (ios_events_get_fds(mfi, rfds, &rcount, wfds, &wcount) != TRUE)
 		{
 			NSLog(@"%s: ios_events_get_fds", __func__);
@@ -185,25 +223,25 @@ ios_run_freerdp(freerdp * instance)
 			
 			FD_SET(fds, &rfds_set);
 		}
-        
+		
 		if (max_fds == 0)
 			break;
-	
-        timeout.tv_sec = 1;
-        timeout.tv_usec = 0;
-
-        select_status = select(max_fds + 1, &rfds_set, NULL, NULL, &timeout);
-        
-        // timeout?
-        if (select_status == 0)
-            continue;
-        else if (select_status == -1)
+		
+		timeout.tv_sec = 1;
+		timeout.tv_usec = 0;
+		
+		select_status = select(max_fds + 1, &rfds_set, NULL, NULL, &timeout);
+		
+		// timeout?
+		if (select_status == 0)
+			continue;
+		else if (select_status == -1)
 		{
 			/* these are not really errors */
 			if (!((errno == EAGAIN) ||
-				  (errno == EWOULDBLOCK) ||
-				  (errno == EINPROGRESS) ||
-				  (errno == EINTR))) /* signal occurred */
+			      (errno == EWOULDBLOCK) ||
+			      (errno == EINPROGRESS) ||
+			      (errno == EINTR))) /* signal occurred */
 			{
 				NSLog(@"%s: select failed!", __func__);
 				break;
@@ -231,20 +269,29 @@ ios_run_freerdp(freerdp * instance)
 			NSLog(@"%s: freerdp_chanman_check_fds failed", __func__);
 			break;
 		}
-        ios_process_channel_event(channels, instance);
-
+		ios_process_channel_event(channels, instance);
+		
 		[pool release]; pool = nil;
-	}	
-
+	}
+	
 	CGContextRelease(mfi->bitmap_context);
-	mfi->bitmap_context = NULL;	
+	mfi->bitmap_context = NULL;
 	mfi->connection_state = TSXConnectionDisconnected;
 	
 	// Cleanup
 	freerdp_channels_close(channels, instance);
+	
+	if (settings->AsyncUpdate)
+	{
+		wMessageQueue* updateQueue = freerdp_get_message_queue(instance, FREERDP_UPDATE_MESSAGE_QUEUE);
+		MessageQueue_PostQuit(updateQueue, 0);
+		WaitForSingleObject(context->UpdateThread, INFINITE);
+		CloseHandle(context->UpdateThread);
+	}
+	
 	freerdp_disconnect(instance);
 	gdi_free(instance);
-    cache_free(instance->context->cache);
+	cache_free(instance->context->cache);
 	
 	[pool release]; pool = nil;
 	return MF_EXIT_SUCCESS;
@@ -286,21 +333,21 @@ freerdp* ios_freerdp_new()
 	inst->PostConnect = ios_post_connect;
 	inst->Authenticate = ios_ui_authenticate;
 	inst->VerifyCertificate = ios_ui_check_certificate;
-    inst->VerifyChangedCertificate = ios_ui_check_changed_certificate;
-    inst->ReceiveChannelData = ios_receive_channel_data;
-    
+	inst->VerifyChangedCertificate = ios_ui_check_changed_certificate;
+	inst->ReceiveChannelData = ios_receive_channel_data;
+	
 	inst->ContextSize = sizeof(mfContext);
 	inst->ContextNew = ios_context_new;
 	inst->ContextFree = ios_context_free;
 	freerdp_context_new(inst);
-    
-    // determine new home path
-    NSString* home_path = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
-    free(inst->settings->HomePath);
-    free(inst->settings->ConfigPath);
-    inst->settings->HomePath = strdup([home_path UTF8String]);
-    inst->settings->ConfigPath = strdup([[home_path stringByAppendingPathComponent:@".freerdp"] UTF8String]);
-
+	
+	// determine new home path
+	NSString* home_path = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+	free(inst->settings->HomePath);
+	free(inst->settings->ConfigPath);
+	inst->settings->HomePath = strdup([home_path UTF8String]);
+	inst->settings->ConfigPath = strdup([[home_path stringByAppendingPathComponent:@".freerdp"] UTF8String]);
+	
 	return inst;
 }
 
@@ -314,7 +361,7 @@ void ios_init_freerdp()
 {
 	signal(SIGPIPE, SIG_IGN);
 	freerdp_channels_global_init();
-    freerdp_register_addin_provider(freerdp_channels_load_static_addin_entry, 0);
+	freerdp_register_addin_provider(freerdp_channels_load_static_addin_entry, 0);
 }
 
 void ios_uninit_freerdp()

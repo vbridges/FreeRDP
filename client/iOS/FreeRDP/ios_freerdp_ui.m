@@ -20,28 +20,28 @@
 BOOL ios_ui_authenticate(freerdp * instance, char** username, char** password, char** domain)
 {
 	mfInfo* mfi = MFI_FROM_INSTANCE(instance);
-
+	
 	NSMutableDictionary* params = [NSMutableDictionary dictionaryWithObjectsAndKeys:
-		(*username) ? [NSString stringWithUTF8String:*username] : @"", @"username",
-		(*password) ? [NSString stringWithUTF8String:*password] : @"", @"password",
-		(*domain) ? [NSString stringWithUTF8String:*domain] : @"", @"domain",
-		[NSString stringWithUTF8String:instance->settings->ServerHostname], @"hostname", // used for the auth prompt message; not changed
-		nil];
-
-    // request auth UI
-    [mfi->session performSelectorOnMainThread:@selector(sessionRequestsAuthenticationWithParams:) withObject:params waitUntilDone:YES];
-    
-    // wait for UI request to be completed
-    [[mfi->session uiRequestCompleted] lock];
-    [[mfi->session uiRequestCompleted] wait];
-    [[mfi->session uiRequestCompleted] unlock];
-    
+				       (*username) ? [NSString stringWithUTF8String:*username] : @"", @"username",
+				       (*password) ? [NSString stringWithUTF8String:*password] : @"", @"password",
+				       (*domain) ? [NSString stringWithUTF8String:*domain] : @"", @"domain",
+				       [NSString stringWithUTF8String:instance->settings->ServerHostname], @"hostname", // used for the auth prompt message; not changed
+				       nil];
+	
+	// request auth UI
+	[mfi->session performSelectorOnMainThread:@selector(sessionRequestsAuthenticationWithParams:) withObject:params waitUntilDone:YES];
+	
+	// wait for UI request to be completed
+	[[mfi->session uiRequestCompleted] lock];
+	[[mfi->session uiRequestCompleted] wait];
+	[[mfi->session uiRequestCompleted] unlock];
+	
 	if (![[params valueForKey:@"result"] boolValue])
 	{
 		mfi->unwanted = YES;
 		return FALSE;
 	}
-	   
+	
 	// Free old values
 	free(*username);
 	free(*password);
@@ -57,25 +57,25 @@ BOOL ios_ui_authenticate(freerdp * instance, char** username, char** password, c
 
 BOOL ios_ui_check_certificate(freerdp * instance, char * subject, char * issuer, char * fingerprint)
 {
-    // check whether we accept all certificates
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"security.accept_certificates"] == YES)
-        return TRUE;
-    
+	// check whether we accept all certificates
+	if ([[NSUserDefaults standardUserDefaults] boolForKey:@"security.accept_certificates"] == YES)
+		return TRUE;
+	
 	mfInfo* mfi = MFI_FROM_INSTANCE(instance);
 	NSMutableDictionary* params = [NSMutableDictionary dictionaryWithObjectsAndKeys:
-                                        (subject) ? [NSString stringWithUTF8String:subject] : @"", @"subject",
-                                        (issuer) ? [NSString stringWithUTF8String:issuer] : @"", @"issuer",
-                                        (fingerprint) ? [NSString stringWithUTF8String:subject] : @"", @"fingerprint",
-                                        nil];
+				       (subject) ? [NSString stringWithUTF8String:subject] : @"", @"subject",
+				       (issuer) ? [NSString stringWithUTF8String:issuer] : @"", @"issuer",
+				       (fingerprint) ? [NSString stringWithUTF8String:subject] : @"", @"fingerprint",
+				       nil];
 	
-    // request certificate verification UI
-    [mfi->session performSelectorOnMainThread:@selector(sessionVerifyCertificateWithParams:) withObject:params waitUntilDone:YES];
-    
-    // wait for UI request to be completed
-    [[mfi->session uiRequestCompleted] lock];
-    [[mfi->session uiRequestCompleted] wait];
-    [[mfi->session uiRequestCompleted] unlock];
-    
+	// request certificate verification UI
+	[mfi->session performSelectorOnMainThread:@selector(sessionVerifyCertificateWithParams:) withObject:params waitUntilDone:YES];
+	
+	// wait for UI request to be completed
+	[[mfi->session uiRequestCompleted] lock];
+	[[mfi->session uiRequestCompleted] wait];
+	[[mfi->session uiRequestCompleted] unlock];
+	
 	if (![[params valueForKey:@"result"] boolValue])
 	{
 		mfi->unwanted = YES;
@@ -87,7 +87,7 @@ BOOL ios_ui_check_certificate(freerdp * instance, char * subject, char * issuer,
 
 BOOL ios_ui_check_changed_certificate(freerdp * instance, char * subject, char * issuer, char * new_fingerprint, char * old_fingerprint)
 {
-	return ios_ui_check_certificate(instance, subject, issuer, new_fingerprint);    
+	return ios_ui_check_certificate(instance, subject, issuer, new_fingerprint);
 }
 
 
@@ -102,7 +102,7 @@ void ios_ui_begin_paint(rdpContext * context)
 
 void ios_ui_end_paint(rdpContext * context)
 {
-    mfInfo* mfi = MFI_FROM_INSTANCE(context->instance);
+	mfInfo* mfi = MFI_FROM_INSTANCE(context->instance);
 	rdpGdi *gdi = context->gdi;
 	CGRect dirty_rect = CGRectMake(gdi->primary->hdc->hwnd->invalid->x, gdi->primary->hdc->hwnd->invalid->y, gdi->primary->hdc->hwnd->invalid->w, gdi->primary->hdc->hwnd->invalid->h);
 	
@@ -120,17 +120,17 @@ void ios_ui_resize_window(rdpContext * context)
 #pragma mark Exported
 
 static void ios_create_bitmap_context(mfInfo* mfi)
-{	
+{
 	[mfi->session performSelectorOnMainThread:@selector(sessionBitmapContextWillChange) withObject:nil waitUntilDone:YES];
-	    
-    rdpGdi* gdi = mfi->instance->context->gdi;
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+	
+	rdpGdi* gdi = mfi->instance->context->gdi;
+	CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
 	if(gdi->dstBpp == 16)
 		mfi->bitmap_context = CGBitmapContextCreate(gdi->primary_buffer, gdi->width, gdi->height, 5, gdi->width * 2, colorSpace, kCGBitmapByteOrder16Little | kCGImageAlphaNoneSkipFirst);
 	else
 		mfi->bitmap_context = CGBitmapContextCreate(gdi->primary_buffer, gdi->width, gdi->height, 8, gdi->width * 4, colorSpace, kCGBitmapByteOrder32Little | kCGImageAlphaNoneSkipFirst);
-    CGColorSpaceRelease(colorSpace);
-    
+	CGColorSpaceRelease(colorSpace);
+	
 	[mfi->session performSelectorOnMainThread:@selector(sessionBitmapContextDidChange) withObject:nil waitUntilDone:YES];
 }
 
