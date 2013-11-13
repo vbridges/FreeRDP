@@ -28,6 +28,7 @@
 #include "../synch/synch.h"
 #include "../thread/thread.h"
 #include "../pipe/pipe.h"
+#include "../security/security.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -48,8 +49,16 @@ BOOL CloseHandle(HANDLE hObject)
 		WINPR_THREAD* thread;
 
 		thread = (WINPR_THREAD*) Object;
+		free(thread);
 
-		free(Object);
+		return TRUE;
+	}
+	else if (Type == HANDLE_TYPE_PROCESS)
+	{
+		WINPR_PROCESS* process;
+
+		process = (WINPR_PROCESS*) Object;
+		free(process);
 
 		return TRUE;
 	}
@@ -122,6 +131,21 @@ BOOL CloseHandle(HANDLE hObject)
 
 		return TRUE;
 	}
+	else if (Type == HANDLE_TYPE_TIMER)
+	{
+		WINPR_TIMER* timer;
+
+		timer = (WINPR_TIMER*) Object;
+
+#ifdef __linux__
+		if (timer->fd != -1)
+			close(timer->fd);
+#endif
+
+		free(Object);
+
+		return TRUE;
+	}
 	else if (Type == HANDLE_TYPE_ANONYMOUS_PIPE)
 	{
 		WINPR_PIPE* pipe;
@@ -136,6 +160,39 @@ BOOL CloseHandle(HANDLE hObject)
 		free(Object);
 
 		return TRUE;
+	}
+	else if (Type == HANDLE_TYPE_NAMED_PIPE)
+	{
+		WINPR_NAMED_PIPE* pipe;
+
+		pipe = (WINPR_NAMED_PIPE*) Object;
+
+		if (pipe->clientfd != -1)
+			close(pipe->clientfd);
+
+		if (pipe->serverfd != -1)
+			close(pipe->serverfd);
+
+		free((char *)pipe->lpFileName);
+		free((char *)pipe->lpFilePath);
+		free((char *)pipe->name);
+		free(pipe);
+
+		return TRUE;
+	}
+	else if (Type == HANDLE_TYPE_ACCESS_TOKEN)
+	{
+		WINPR_ACCESS_TOKEN* token;
+
+		token = (WINPR_ACCESS_TOKEN*) Object;
+
+		if (token->Username)
+			free(token->Username);
+
+		if (token->Domain)
+			free(token->Domain);
+
+		free(token);
 	}
 
 	return FALSE;

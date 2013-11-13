@@ -30,6 +30,8 @@
 #include "extension.h"
 #include "message.h"
 
+#include <assert.h>
+
 #include <winpr/crt.h>
 #include <winpr/stream.h>
 
@@ -37,6 +39,7 @@
 #include <freerdp/error.h>
 #include <freerdp/event.h>
 #include <freerdp/locale/keyboard.h>
+#include <freerdp/version.h>
 
 /* connectErrorCode is 'extern' in error.h. See comment there.*/
 
@@ -83,7 +86,8 @@ BOOL freerdp_connect(freerdp* instance)
 			connectErrorCode = PREECONNECTERROR;
 		}
 		fprintf(stderr, "%s:%d: freerdp_pre_connect failed\n", __FILE__, __LINE__);
-		return FALSE;
+
+		goto freerdp_connect_finally;
 	}
 
 	status = rdp_client_connect(rdp);
@@ -92,7 +96,7 @@ BOOL freerdp_connect(freerdp* instance)
 	if (instance->settings->AuthenticationOnly)
 	{
 		fprintf(stderr, "%s:%d: Authentication only, exit status %d\n", __FILE__, __LINE__, !status);
-		return status;
+		goto freerdp_connect_finally;
 	}
 
 	if (status)
@@ -118,7 +122,7 @@ BOOL freerdp_connect(freerdp* instance)
 				connectErrorCode = POSTCONNECTERROR;
 			}
 
-			return FALSE;
+			goto freerdp_connect_finally;
 		}
 
 		if (instance->settings->PlayRemoteFx)
@@ -132,9 +136,14 @@ BOOL freerdp_connect(freerdp* instance)
 			update->pcap_rfx = pcap_open(settings->PlayRemoteFxFile, FALSE);
 
 			if (!update->pcap_rfx)
-				return FALSE;
+			{
+				status = FALSE;
+				goto freerdp_connect_finally;
+			}
 			else
+			{
 				update->play_rfx = TRUE;
+			}
 
 			while (pcap_has_next_record(update->pcap_rfx))
 			{
@@ -152,9 +161,14 @@ BOOL freerdp_connect(freerdp* instance)
 				update_recv_surfcmds(update, Stream_Length(s) , s);
 				update->EndPaint(update->context);
 				Stream_Release(s);
+			
+				StreamPool_Return(rdp->transport->ReceivePool, s);
 			}
 
-			return TRUE;
+			pcap_close(update->pcap_rfx);
+			update->pcap_rfx = NULL;
+			status = TRUE;
+			goto freerdp_connect_finally;
 		}
 	}
 
@@ -169,6 +183,8 @@ BOOL freerdp_connect(freerdp* instance)
 	}
 
 	SetEvent(rdp->transport->connectedEvent);
+
+	freerdp_connect_finally:
 
 	EventArgsInit(&e, "freerdp");
 	e.result = status ? 0 : -1;
@@ -192,6 +208,10 @@ BOOL freerdp_check_fds(freerdp* instance)
 {
 	int status;
 	rdpRdp* rdp;
+
+	assert(instance);
+	assert(instance->context);
+	assert(instance->context->rdp);
 
 	rdp = instance->context->rdp;
 
@@ -291,6 +311,15 @@ BOOL freerdp_disconnect(freerdp* instance)
 	rdp = instance->context->rdp;
 	transport_disconnect(rdp->transport);
 
+	IFCALL(instance->PostDisconnect, instance);
+
+	if (instance->update->pcap_rfx)
+	{
+		instance->update->dump_rfx = FALSE;
+		pcap_close(instance->update->pcap_rfx);
+		instance->update->pcap_rfx = NULL;
+	}
+
 	return TRUE;
 }
 
@@ -329,18 +358,18 @@ void freerdp_get_version(int* major, int* minor, int* revision)
 
 static wEventType FreeRDP_Events[] =
 {
-	DEFINE_EVENT_ENTRY(WindowStateChange)
-	DEFINE_EVENT_ENTRY(ResizeWindow)
-	DEFINE_EVENT_ENTRY(LocalResizeWindow)
-	DEFINE_EVENT_ENTRY(EmbedWindow)
-	DEFINE_EVENT_ENTRY(PanningChange)
-	DEFINE_EVENT_ENTRY(ScalingFactorChange)
-	DEFINE_EVENT_ENTRY(ErrorInfo)
-	DEFINE_EVENT_ENTRY(ParamChange)
-	DEFINE_EVENT_ENTRY(Terminate)
-	DEFINE_EVENT_ENTRY(ConnectionResult)
-	DEFINE_EVENT_ENTRY(ChannelConnected)
-	DEFINE_EVENT_ENTRY(ChannelDisconnected)
+		DEFINE_EVENT_ENTRY(WindowStateChange)
+		DEFINE_EVENT_ENTRY(ResizeWindow)
+		DEFINE_EVENT_ENTRY(LocalResizeWindow)
+		DEFINE_EVENT_ENTRY(EmbedWindow)
+		DEFINE_EVENT_ENTRY(PanningChange)
+		DEFINE_EVENT_ENTRY(ScalingFactorChange)
+		DEFINE_EVENT_ENTRY(ErrorInfo)
+		DEFINE_EVENT_ENTRY(ParamChange)
+		DEFINE_EVENT_ENTRY(Terminate)
+		DEFINE_EVENT_ENTRY(ConnectionResult)
+		DEFINE_EVENT_ENTRY(ChannelConnected)
+		DEFINE_EVENT_ENTRY(ChannelDisconnected)
 };
 
 /** Allocator function for a rdp context.
@@ -358,18 +387,22 @@ int freerdp_context_new(freerdp* instance)
 
 	instance->context = (rdpContext*) malloc(instance->ContextSize);
 	ZeroMemory(instance->context, instance->ContextSize);
+
 	context = instance->context;
+	context->instance = instance;
+
+	context->ServerMode = FALSE;
+	context->settings = instance->settings;
 
 	context->pubSub = PubSub_New(TRUE);
 	PubSub_AddEventTypes(context->pubSub, FreeRDP_Events, sizeof(FreeRDP_Events) / sizeof(wEventType));
 
-	rdp = rdp_new(instance);
+	rdp = rdp_new(context);
 	instance->input = rdp->input;
 	instance->update = rdp->update;
 	instance->settings = rdp->settings;
 
 	context->graphics = graphics_new(context);
-	context->instance = instance;
 	context->rdp = rdp;
 
 	context->input = instance->input;
@@ -401,6 +434,9 @@ int freerdp_context_new(freerdp* instance)
  */
 void freerdp_context_free(freerdp* instance)
 {
+	if (!instance)
+		return;
+
 	if (!instance->context)
 		return;
 

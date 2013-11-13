@@ -9,6 +9,10 @@
 
 #import <CoreGraphics/CoreGraphics.h>
 
+#import <winpr/crt.h>
+#import <winpr/synch.h>
+#import <winpr/thread.h>
+
 #import <freerdp/freerdp.h>
 #import <freerdp/channels/channels.h>
 #import "TSXTypes.h"
@@ -25,6 +29,8 @@ typedef struct mf_context
 	
 	mfInfo* mfi;
 	rdpSettings* settings;
+	
+	HANDLE UpdateThread;
 } mfContext;
 
 

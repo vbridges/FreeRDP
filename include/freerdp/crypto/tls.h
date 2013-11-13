@@ -39,9 +39,12 @@ typedef struct rdp_tls rdpTls;
 struct rdp_tls
 {
 	SSL* ssl;
+	BIO* bio;
+	void* tsg;
 	int sockfd;
 	SSL_CTX* ctx;
 	BYTE* PublicKey;
+	BIO_METHOD* methods;
 	DWORD PublicKeyLength;
 	rdpSettings* settings;
 	SecPkgContext_Bindings* Bindings;
@@ -55,7 +58,6 @@ FREERDP_API BOOL tls_disconnect(rdpTls* tls);
 FREERDP_API int tls_read(rdpTls* tls, BYTE* data, int length);
 FREERDP_API int tls_write(rdpTls* tls, BYTE* data, int length);
 
-FREERDP_API int tls_read_all(rdpTls* tls, BYTE* data, int length);
 FREERDP_API int tls_write_all(rdpTls* tls, BYTE* data, int length);
 
 FREERDP_API int tls_wait_read(rdpTls* tls);

@@ -789,10 +789,10 @@ void gdi_surface_bits(rdpContext* context, SURFACE_BITS_COMMAND* surface_bits_co
 		message = rfx_process_message(rfx_context,
 				surface_bits_command->bitmapData, surface_bits_command->bitmapDataLength);
 
-		DEBUG_GDI("num_rects %d num_tiles %d", message->num_rects, message->num_tiles);
+		DEBUG_GDI("num_rects %d num_tiles %d", message->numRects, message->numTiles);
 
 		/* blit each tile */
-		for (i = 0; i < message->num_tiles; i++)
+		for (i = 0; i < message->numTiles; i++)
 		{
 			tx = message->tiles[i]->x + surface_bits_command->destLeft;
 			ty = message->tiles[i]->y + surface_bits_command->destTop;
@@ -805,7 +805,7 @@ void gdi_surface_bits(rdpContext* context, SURFACE_BITS_COMMAND* surface_bits_co
 #endif
 
 
-			for (j = 0; j < message->num_rects; j++)
+			for (j = 0; j < message->numRects; j++)
 			{
 				gdi_SetClipRgn(gdi->primary->hdc,
 					surface_bits_command->destLeft + message->rects[j].x,
@@ -828,7 +828,7 @@ void gdi_surface_bits(rdpContext* context, SURFACE_BITS_COMMAND* surface_bits_co
 		gdi->image->bitmap->bitsPerPixel = surface_bits_command->bpp;
 		gdi->image->bitmap->bytesPerPixel = gdi->image->bitmap->bitsPerPixel / 8;
 		gdi->image->bitmap->data = (BYTE*) realloc(gdi->image->bitmap->data, gdi->image->bitmap->width * gdi->image->bitmap->height * 4);
-		freerdp_image_flip(nsc_context->bmpdata, gdi->image->bitmap->data, gdi->image->bitmap->width, gdi->image->bitmap->height, 32);
+		freerdp_image_flip(nsc_context->BitmapData, gdi->image->bitmap->data, gdi->image->bitmap->width, gdi->image->bitmap->height, 32);
 		gdi_BitBlt(gdi->primary->hdc, surface_bits_command->destLeft, surface_bits_command->destTop, surface_bits_command->width, surface_bits_command->height, gdi->image->hdc, 0, 0, GDI_SRCCOPY);
 	} 
 	else if (surface_bits_command->codecID == RDP_CODEC_ID_NONE)
@@ -917,10 +917,20 @@ void gdi_register_update_callbacks(rdpUpdate* update)
 
 void gdi_init_primary(rdpGdi* gdi)
 {
-	gdi->primary = gdi_bitmap_new_ex(gdi, gdi->width, gdi->height, gdi->dstBpp, gdi->primary_buffer);
+	gdi->primary = (gdiBitmap*) malloc(sizeof(gdiBitmap));
+	gdi->primary->hdc = gdi_CreateCompatibleDC(gdi->hdc);
+
+	if (!gdi->primary_buffer)
+		gdi->primary->bitmap = gdi_CreateCompatibleBitmap(gdi->hdc, gdi->width, gdi->height);
+	else
+		gdi->primary->bitmap = gdi_CreateBitmap(gdi->width, gdi->height, gdi->dstBpp, gdi->primary_buffer);
+
+	gdi_SelectObject(gdi->primary->hdc, (HGDIOBJECT) gdi->primary->bitmap);
+	gdi->primary->org_bitmap = NULL;
+
 	gdi->primary_buffer = gdi->primary->bitmap->data;
 
-	if (gdi->drawing == NULL)
+	if (!gdi->drawing)
 		gdi->drawing = gdi->primary;
 
 	gdi->primary->hdc->hwnd = (HGDI_WND) malloc(sizeof(GDI_WND));
@@ -1026,7 +1036,7 @@ int gdi_init(freerdp* instance, UINT32 flags, BYTE* buffer)
 	gdi->tile = gdi_bitmap_new_ex(gdi, 64, 64, 32, NULL);
 	gdi->image = gdi_bitmap_new_ex(gdi, 64, 64, 32, NULL);
 
-	if (cache == NULL)
+	if (!cache)
 	{
 		cache = cache_new(instance->settings);
 		instance->context->cache = cache;
@@ -1042,7 +1052,7 @@ int gdi_init(freerdp* instance, UINT32 flags, BYTE* buffer)
 
 	gdi_register_graphics(instance->context->graphics);
 
-	gdi->rfx_context = rfx_context_new();
+	gdi->rfx_context = rfx_context_new(FALSE);
 	gdi->nsc_context = nsc_context_new();
 
 	return 0;

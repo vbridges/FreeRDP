@@ -18,6 +18,9 @@
 set(MODULE_NAME "freerdp-client")
 set(MODULE_PREFIX "FREERDP_CLIENT")
 
+include_directories(${OPENSSL_INCLUDE_DIR})
+include_directories(${ZLIB_INCLUDE_DIRS})
+
 set(${MODULE_PREFIX}_SRCS
 	client.c
 	cmdline.c
@@ -25,9 +28,10 @@ set(${MODULE_PREFIX}_SRCS
 	compatibility.h
 	file.c)
 
-set(FREERDP_CHANNELS_CLIENT_PATH "../../channels/client")
 foreach(FREERDP_CHANNELS_CLIENT_SRC ${FREERDP_CHANNELS_CLIENT_SRCS})
-	set(${MODULE_PREFIX}_SRCS ${${MODULE_PREFIX}_SRCS} "${FREERDP_CHANNELS_CLIENT_PATH}/${FREERDP_CHANNELS_CLIENT_SRC}")
+	get_filename_component(NINC ${FREERDP_CHANNELS_CLIENT_SRC} PATH)
+	include_directories(${NINC})
+	set(${MODULE_PREFIX}_SRCS ${${MODULE_PREFIX}_SRCS} "${FREERDP_CHANNELS_CLIENT_SRC}")
 endforeach()
 
 if(MSVC)
@@ -49,11 +53,11 @@ set_complex_link_libraries(VARIABLE ${MODULE_PREFIX}_LIBS MONOLITHIC ${MONOLITHI
 	MODULE winpr
 	MODULES winpr-crt winpr-utils)
 
-target_link_libraries(${MODULE_NAME} ${${MODULE_PREFIX}_LIBS})
-
 set_target_properties(${MODULE_NAME} PROPERTIES LINK_INTERFACE_LIBRARIES "")
 
-install(TARGETS ${MODULE_NAME} DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT libraries)
+target_link_libraries(${MODULE_NAME} ${${MODULE_PREFIX}_LIBS})
+
+install(TARGETS ${MODULE_NAME} DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT libraries EXPORT FreeRDPTargets)
 
 set_property(TARGET ${MODULE_NAME} PROPERTY FOLDER "Client/Common")
 

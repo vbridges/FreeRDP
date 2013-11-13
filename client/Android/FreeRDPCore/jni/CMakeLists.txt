@@ -19,9 +19,13 @@
 set(MODULE_NAME "freerdp-android")
 set(MODULE_PREFIX "FREERDP_CLIENT_ANDROID")
 
-
 include_directories(.)
 include_directories(generated)
+
+CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/Application.mk.cmake
+	${CMAKE_CURRENT_BINARY_DIR}/Application.mk @ONLY)
+CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/Android.mk.cmake
+	${CMAKE_CURRENT_BINARY_DIR}/Android.mk @ONLY)
 
 if(CMAKE_COMPILER_IS_GNUCC)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-pointer-sign")
@@ -68,6 +72,11 @@ set(${MODULE_PREFIX}_LIBS ${${MODULE_PREFIX}_LIBS} jnigraphics)
 
 target_link_libraries(${MODULE_NAME} ${${MODULE_PREFIX}_LIBS})
 
-set_target_properties(${MODULE_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${ANDROID_SOURCE_DIR}/libs/${ANDROID_ABI}")
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/${ANDROID_ABI}")
+set_target_properties(${MODULE_NAME}
+	PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/${ANDROID_ABI}")
 
 set_property(TARGET ${MODULE_NAME} PROPERTY FOLDER "Client/Android")
+
+get_property(LIB_ABSNAME TARGET ${MODULE_NAME} PROPERTY LOCATION)
+

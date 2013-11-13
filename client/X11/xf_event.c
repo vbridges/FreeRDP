@@ -99,15 +99,17 @@ static BOOL xf_event_Expose(xfContext* xfc, XEvent* event, BOOL app)
 	{
 		if ((xfc->settings->ScalingFactor != 1.0) || (xfc->offset_x) || (xfc->offset_y))
 		{
-			xf_draw_screen_scaled(xfc, x - xfc->offset_x,
+			xf_draw_transformed_region(xfc, x - xfc->offset_x,
 					      y - xfc->offset_y, w, h, FALSE);
-		} else
+		}
+		else
 		{
 			XCopyArea(xfc->display, xfc->primary,
 				  xfc->window->handle, xfc->gc, x, y, w,
 				  h, x, y);
 		}
-	} else
+	}
+	else
 	{
 		xfWindow* xfw;
 		rdpWindow* window;
@@ -116,7 +118,7 @@ static BOOL xf_event_Expose(xfContext* xfc, XEvent* event, BOOL app)
 		window = window_list_get_by_extra_id(rail->list,
 						     (void*) event->xexpose.window);
 		
-		if (window != NULL )
+		if (window)
 		{
 			xfw = (xfWindow*) window->extra;
 			xf_UpdateWindowArea(xfc, xfw, x, y, w, h);
@@ -179,6 +181,9 @@ BOOL xf_generic_MotionNotify(xfContext* xfc, int x, int y, int state, Window win
 static BOOL xf_event_MotionNotify(xfContext* xfc, XEvent* event, BOOL app)
 {
 	if (xfc->use_xinput)
+		return TRUE;
+
+	if (xfc->supress_mouse)
 		return TRUE;
 
 	return xf_generic_MotionNotify(xfc, event->xmotion.x, event->xmotion.y,
@@ -287,6 +292,9 @@ BOOL xf_generic_ButtonPress(xfContext* xfc, int x, int y, int button, Window win
 static BOOL xf_event_ButtonPress(xfContext* xfc, XEvent* event, BOOL app)
 {
 	if (xfc->use_xinput)
+		return TRUE;
+
+	if(xfc->supress_mouse)
 		return TRUE;
 
 	return xf_generic_ButtonPress(xfc, event->xbutton.x, event->xbutton.y,
@@ -473,7 +481,9 @@ static BOOL xf_event_MappingNotify(xfContext* xfc, XEvent* event, BOOL app)
 {
 	if (event->xmapping.request == MappingModifier)
 	{
-		XFreeModifiermap(xfc->modifier_map);
+		if (xfc->modifier_map)
+			XFreeModifiermap(xfc->modifier_map);
+
 		xfc->modifier_map = XGetModifierMapping(xfc->display);
 	}
 
@@ -566,7 +576,7 @@ static BOOL xf_event_ConfigureNotify(xfContext* xfc, XEvent* event, BOOL app)
 		xfc->currentWidth = event->xconfigure.width;
 		xfc->currentHeight = event->xconfigure.width;
 
-		xf_draw_screen_scaled(xfc);
+		xf_draw_transformed_region(xfc);
 	}
 */
         window = window_list_get_by_extra_id(rail->list, (void*) event->xconfigure.window);

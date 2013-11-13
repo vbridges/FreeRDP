@@ -22,6 +22,8 @@
 #include "config.h"
 #endif
 
+#include <assert.h>
+
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
@@ -100,44 +102,72 @@
 static long xv_port = 0;
 static const size_t password_size = 512;
 
+/*
+ * This function is called for setting the behavior of
+ *the window manager for the client. The handling
+ *of window sizing is cofigured here.
+ *
+ * If our screen is 100x100 and we apply a translation
+ *of 5px to the right, then we need a window to be
+ *105x100.
+ *
+ * If our screen is 100x100 and we apply a scaling of
+ *1.25, then we will need the window to be 125x125
+ *
+ */
 void xf_transform_window(xfContext* xfc)
 {
 	int ret;
-	int w;
-	int h;
+	int total_width;
+	int total_height;
 	long supplied;
 	Atom hints_atom;
 	XSizeHints* size_hints = NULL;
 
+	//if(xfc->settings->ParentWindowId)
+	//{
+		//printf("toolkit has control of window\n");
+	//}
+
+
 	hints_atom = XInternAtom(xfc->display, "WM_SIZE_HINTS", 1);
 
-	ret = XGetWMSizeHints(xfc->display, xfc->window->handle, size_hints, &supplied, hints_atom);
+	size_hints = XAllocSizeHints();
+	ret = XGetWMNormalHints(xfc->display, xfc->window->handle, size_hints, &supplied);
+	
 
-	if(ret == 0)
-		size_hints = XAllocSizeHints();
+	total_width = (xfc->originalWidth * xfc->settings->ScalingFactor) + xfc->offset_x;
+	total_height = (xfc->originalHeight * xfc->settings->ScalingFactor) + xfc->offset_y;
 
-	w = (xfc->originalWidth * xfc->settings->ScalingFactor) + xfc->offset_x;
-	h = (xfc->originalHeight * xfc->settings->ScalingFactor) + xfc->offset_y;
+	if(total_width < 1)
+		total_width = 1;
 
-	if(w < 1)
-		w = 1;
-
-	if(h < 1)
-		h = 1;
+	if(total_height < 1)
+		total_height = 1;
 
 	if (size_hints)
 	{
 		size_hints->flags |= PMinSize | PMaxSize;
-		size_hints->min_width = size_hints->max_width = w;
-		size_hints->min_height = size_hints->max_height = h;
+		size_hints->min_width = size_hints->max_width = total_width;
+		size_hints->min_height = size_hints->max_height = total_height;
 		XSetWMNormalHints(xfc->display, xfc->window->handle, size_hints);
-		XResizeWindow(xfc->display, xfc->window->handle, w, h);
+		//XSetWMSizeHints(xfc->display, xfc->window->handle, size_hints, hints_atom);
+		XResizeWindow(xfc->display, xfc->window->handle, total_width, total_height);
 
 		XFree(size_hints);
 	}
 }
 
-void xf_draw_screen_scaled(xfContext* xfc, int x, int y, int w, int h, BOOL scale)
+/*
+ * This function is a wrapper to XRender such that
+ *bitmaps can be drawn with an applied tranformation
+ *such as scaling or translation. This function is
+ *used similarly to XCopyArea
+ *
+ * If w or h are 0, the entire screen will be
+ *drawn (slow).
+ */
+void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL scale)
 {
 #ifdef WITH_XRENDER
 	XTransform transform;
@@ -147,11 +177,13 @@ void xf_draw_screen_scaled(xfContext* xfc, int x, int y, int w, int h, BOOL scal
 	XRenderPictFormat* picFormat;
 	XRectangle xr;
 
+	//set up the pictures
 	picFormat = XRenderFindStandardFormat(xfc->display, PictStandardRGB24);
 	pa.subwindow_mode = IncludeInferiors;
 	primaryPicture = XRenderCreatePicture(xfc->display, xfc->primary, picFormat, CPSubwindowMode, &pa);
 	windowPicture = XRenderCreatePicture(xfc->display, xfc->window->handle, picFormat, CPSubwindowMode, &pa);
 
+	//set up the transformation matrix for scaling
 	transform.matrix[0][0] = XDoubleToFixed(1);
 	transform.matrix[0][1] = XDoubleToFixed(0);
 	transform.matrix[0][2] = XDoubleToFixed(0);
@@ -164,6 +196,12 @@ void xf_draw_screen_scaled(xfContext* xfc, int x, int y, int w, int h, BOOL scal
 	transform.matrix[2][1] = XDoubleToFixed(0);
 	transform.matrix[2][2] = XDoubleToFixed(xfc->settings->ScalingFactor);
 
+	/*
+	 * if we have a width and height for the region
+	 *then we set the clipping rectangle. Otherwise
+	 *without a clipping rectangle, the entire
+	 *primaryPicture will be drawn.
+	 */
 	if( (w != 0) && (h != 0) )
 	{
 
@@ -171,8 +209,8 @@ void xf_draw_screen_scaled(xfContext* xfc, int x, int y, int w, int h, BOOL scal
 		{
 			xr.x = x * xfc->settings->ScalingFactor;
 			xr.y = y * xfc->settings->ScalingFactor;
-			xr.width = (w+1) * xfc->settings->ScalingFactor;
-			xr.height = (h+1) * xfc->settings->ScalingFactor;
+			xr.width = w * xfc->settings->ScalingFactor + 1;
+			xr.height = h * xfc->settings->ScalingFactor + 1;
 		}
 		else
 		{
@@ -182,7 +220,24 @@ void xf_draw_screen_scaled(xfContext* xfc, int x, int y, int w, int h, BOOL scal
 			xr.height = h;
 		}
 
+
+
 		XRenderSetPictureClipRectangles(xfc->display, primaryPicture, 0, 0, &xr, 1);
+	}
+
+	switch(xfc->settings->RenderQuality)
+	{
+	case 0:
+		XRenderSetPictureFilter(xfc->display, primaryPicture, "fast", NULL, 0);
+		break;
+	case 1:
+		XRenderSetPictureFilter(xfc->display, primaryPicture, "good", NULL, 0);
+		break;
+	case 2:
+		XRenderSetPictureFilter(xfc->display, primaryPicture, "best", NULL, 0);
+		break;
+	default:
+		break;
 	}
 
 	XRenderSetPictureTransform(xfc->display, primaryPicture, &transform);
@@ -194,6 +249,24 @@ void xf_draw_screen_scaled(xfContext* xfc, int x, int y, int w, int h, BOOL scal
 
 #endif
 
+}
+
+void xf_scale_update(xfContext* xfc)
+{
+  int wdiff;
+
+  xfc->currentWidth = (int)(xfc->originalWidth * xfc->settings->ScalingFactor);
+  xfc->currentHeight = (int)(xfc->originalHeight * xfc->settings->ScalingFactor);
+
+  //check for floating point rounding error
+  wdiff = abs(xfc->currentWidth - xfc->originalWidth);
+  if( (wdiff) && (wdiff < 3) )
+    {
+      xfc->currentWidth = xfc->originalWidth;
+      xfc->currentHeight = xfc->originalHeight;
+
+      xfc->settings->ScalingFactor = 1.0;
+    } 
 }
 
 void xf_sw_begin_paint(rdpContext* context)
@@ -230,7 +303,7 @@ void xf_sw_end_paint(rdpContext* context)
 
 			if ( (xfc->settings->ScalingFactor != 1.0) || (xfc->offset_x) || (xfc->offset_y) )
 			{
-				xf_draw_screen_scaled(xfc, x, y, w, h, TRUE);
+				xf_draw_transformed_region(xfc, x, y, w, h, TRUE);
 			}
 			else
 			{
@@ -265,7 +338,7 @@ void xf_sw_end_paint(rdpContext* context)
 
 				if ( (xfc->settings->ScalingFactor != 1.0) || (xfc->offset_x) || (xfc->offset_y) )
 				{
-					xf_draw_screen_scaled(xfc, x, y, w, h, TRUE);
+					xf_draw_transformed_region(xfc, x, y, w, h, TRUE);
 				}
 				else
 				{
@@ -352,7 +425,7 @@ void xf_hw_end_paint(rdpContext* context)
 
 			if ( (xfc->settings->ScalingFactor != 1.0) || (xfc->offset_x) || (xfc->offset_y) )
 			{
-				xf_draw_screen_scaled(xfc, x, y, w, h, TRUE);
+				xf_draw_transformed_region(xfc, x, y, w, h, TRUE);
 			}
 			else
 			{
@@ -384,7 +457,7 @@ void xf_hw_end_paint(rdpContext* context)
 				
 				if ( (xfc->settings->ScalingFactor != 1.0) || (xfc->offset_x) || (xfc->offset_y) )
 				{
-					xf_draw_screen_scaled(xfc, x, y, w, h, TRUE);
+					xf_draw_transformed_region(xfc, x, y, w, h, TRUE);
 				}
 				else
 				{
@@ -718,6 +791,24 @@ int _xf_error_handler(Display* d, XErrorEvent* ev)
 	return xf_error_handler(d, ev);
 }
 
+static void xf_post_disconnect(freerdp *instance)
+{
+	xfContext* xfc = (xfContext*) instance->context;
+
+	assert(NULL != instance);
+	assert(NULL != xfc);
+	assert(NULL != instance->settings);
+
+	if (xfc->mutex)
+	{
+		WaitForSingleObject(xfc->mutex, INFINITE);
+		CloseHandle(xfc->mutex);
+		xfc->mutex = NULL;
+	}
+
+	xf_monitors_free(xfc, instance->settings);
+}
+
 /**
  * Callback given to freerdp_connect() to process the pre-connect operations.
  * It will fill the rdp_freerdp structure (instance) with the appropriate options to use for the connection.
@@ -734,41 +825,11 @@ BOOL xf_pre_connect(freerdp* instance)
 	rdpSettings* settings;
 	xfContext* xfc = (xfContext*) instance->context;
 
-	xfc->mutex = CreateMutex(NULL, FALSE, NULL);
-
 	xfc->settings = instance->settings;
 	xfc->instance = instance;
 
 	settings = instance->settings;
 	channels = instance->context->channels;
-
-	PubSub_SubscribeChannelConnected(instance->context->pubSub,
-			(pChannelConnectedEventHandler) xf_OnChannelConnectedEventHandler);
-
-	PubSub_SubscribeChannelDisconnected(instance->context->pubSub,
-			(pChannelDisconnectedEventHandler) xf_OnChannelDisconnectedEventHandler);
-
-	freerdp_client_load_addins(channels, instance->settings);
-
-	freerdp_channels_pre_connect(channels, instance);
-
-	if (settings->AuthenticationOnly)
-	{
-		/* Check --authonly has a username and password. */
-		if (settings->Username == NULL)
-		{
-			fprintf(stderr, "--authonly, but no -u username. Please provide one.\n");
-			exit(1);
-		}
-		if (settings->Password == NULL)
-		{
-			fprintf(stderr, "--authonly, but no -p password. Please provide one.\n");
-			exit(1);
-		}
-		fprintf(stderr, "%s:%d: Authentication only. Don't connect to X.\n", __FILE__, __LINE__);
-		/* Avoid XWindows initialization and configuration below. */
-		return TRUE;
-	}
 
 	xfc->UseXThreads = TRUE;
 
@@ -795,6 +856,36 @@ BOOL xf_pre_connect(freerdp* instance)
 		fprintf(stderr, "Enabling X11 debug mode.\n");
 		XSynchronize(xfc->display, TRUE);
 		_def_error_handler = XSetErrorHandler(_xf_error_handler);
+	}
+
+	xfc->mutex = CreateMutex(NULL, FALSE, NULL);
+
+	PubSub_SubscribeChannelConnected(instance->context->pubSub,
+			(pChannelConnectedEventHandler) xf_OnChannelConnectedEventHandler);
+
+	PubSub_SubscribeChannelDisconnected(instance->context->pubSub,
+			(pChannelDisconnectedEventHandler) xf_OnChannelDisconnectedEventHandler);
+
+	freerdp_client_load_addins(channels, instance->settings);
+
+	freerdp_channels_pre_connect(channels, instance);
+
+	if (settings->AuthenticationOnly)
+	{
+		/* Check --authonly has a username and password. */
+		if (settings->Username == NULL)
+		{
+			fprintf(stderr, "--authonly, but no -u username. Please provide one.\n");
+			return FALSE;
+		}
+		if (settings->Password == NULL)
+		{
+			fprintf(stderr, "--authonly, but no -p password. Please provide one.\n");
+			return FALSE;
+		}
+		fprintf(stderr, "%s:%d: Authentication only. Don't connect to X.\n", __FILE__, __LINE__);
+		/* Avoid XWindows initialization and configuration below. */
+		return TRUE;
 	}
 
 	xfc->_NET_WM_ICON = XInternAtom(xfc->display, "_NET_WM_ICON", False);
@@ -893,7 +984,7 @@ BOOL xf_post_connect(freerdp* instance)
 
 		if (instance->settings->RemoteFxCodec)
 		{
-			rfx_context = (void*) rfx_context_new();
+			rfx_context = (void*) rfx_context_new(FALSE);
 			xfc->rfx_context = rfx_context;
 		}
 
@@ -922,6 +1013,10 @@ BOOL xf_post_connect(freerdp* instance)
 	xf_create_window(xfc);
 
 	ZeroMemory(&gcv, sizeof(gcv));
+
+	if (xfc->modifier_map)
+		XFreeModifiermap(xfc->modifier_map);
+
 	xfc->modifier_map = XGetModifierMapping(xfc->display);
 
 	xfc->gc = XCreateGC(xfc->display, xfc->drawable, GCGraphicsExposures, &gcv);
@@ -1209,6 +1304,8 @@ void* xf_update_thread(void* arg)
 	wMessageQueue* queue;
 	freerdp* instance = (freerdp*) arg;
 
+	assert( NULL != instance);
+
 	status = 1;
 	queue = freerdp_get_message_queue(instance, FREERDP_UPDATE_MESSAGE_QUEUE);
 
@@ -1226,6 +1323,7 @@ void* xf_update_thread(void* arg)
 			break;
 	}
 
+	ExitThread(0);
 	return NULL;
 }
 
@@ -1238,9 +1336,12 @@ void* xf_input_thread(void* arg)
 	int pending_status = 1;
 	int process_status = 1;
 	freerdp* instance = (freerdp*) arg;
+	assert(NULL != instance);
 
 	xfc = (xfContext*) instance->context;
+	assert(NULL != xfc);
 
+	queue = freerdp_get_message_queue(instance, FREERDP_INPUT_MESSAGE_QUEUE);
 	event = CreateFileDescriptorEvent(NULL, FALSE, FALSE, xfc->xfds);
 
 	while (WaitForSingleObject(event, INFINITE) == WAIT_OBJECT_0)
@@ -1273,9 +1374,8 @@ void* xf_input_thread(void* arg)
 			break;
 	}
 
-	queue = freerdp_get_message_queue(instance, FREERDP_INPUT_MESSAGE_QUEUE);
 	MessageQueue_PostQuit(queue, 0);
-
+	ExitThread(0);
 	return NULL;
 }
 
@@ -1286,8 +1386,10 @@ void* xf_channels_thread(void* arg)
 	HANDLE event;
 	rdpChannels* channels;
 	freerdp* instance = (freerdp*) arg;
+	assert(NULL != instance);
 
 	xfc = (xfContext*) instance->context;
+	assert(NULL != xfc);
 
 	channels = instance->context->channels;
 	event = freerdp_channels_get_event_handle(instance);
@@ -1295,9 +1397,13 @@ void* xf_channels_thread(void* arg)
 	while (WaitForSingleObject(event, INFINITE) == WAIT_OBJECT_0)
 	{
 		status = freerdp_channels_process_pending_messages(instance);
+		if (!status)
+			break;
+
 		xf_process_channel_event(channels, instance);
 	}
 
+	ExitThread(0);
 	return NULL;
 }
 
@@ -1341,6 +1447,7 @@ void* xf_thread(void* param)
 	input_event = NULL;
 
 	instance = (freerdp*) param;
+	assert(NULL != instance);
 
 	ZeroMemory(rfds, sizeof(rfds));
 	ZeroMemory(wfds, sizeof(wfds));
@@ -1349,17 +1456,27 @@ void* xf_thread(void* param)
 	status = freerdp_connect(instance);
 
 	xfc = (xfContext*) instance->context;
+	assert(NULL != xfc);
 
 	/* Connection succeeded. --authonly ? */
 	if (instance->settings->AuthenticationOnly)
 	{
 		freerdp_disconnect(instance);
 		fprintf(stderr, "%s:%d: Authentication only, exit status %d\n", __FILE__, __LINE__, !status);
-		exit(!status);
+		ExitThread(exit_code);
 	}
 
 	if (!status)
 	{
+		if (xfc->mutex)
+		{
+			WaitForSingleObject(xfc->mutex, INFINITE);
+			CloseHandle(xfc->mutex);
+			xfc->mutex = NULL;
+		}
+
+		xf_monitors_free(xfc, instance->settings);
+
 		exit_code = XF_EXIT_CONN_FAILED;
 		ExitThread(exit_code);
 	}
@@ -1392,8 +1509,14 @@ void* xf_thread(void* param)
 		rcount = 0;
 		wcount = 0;
 
+		/*
+		 * win8 and server 2k12 seem to have some timing issue/race condition
+		 * when a initial sync request is send to sync the keyboard inidcators
+		 * sending the sync event twice fixed this problem
+		 */
 		if (freerdp_focus_required(instance))
 		{
+			xf_kbd_focus_in(xfc);
 			xf_kbd_focus_in(xfc);
 		}
 
@@ -1512,12 +1635,30 @@ void* xf_thread(void* param)
 		}
 	}
 
+	/* Close the channels first. This will signal the internal message pipes
+	 * that the threads should quit. */
+	freerdp_channels_close(channels, instance);
+
 	if (async_update)
 	{
 		wMessageQueue* update_queue = freerdp_get_message_queue(instance, FREERDP_UPDATE_MESSAGE_QUEUE);
 		MessageQueue_PostQuit(update_queue, 0);
 		WaitForSingleObject(update_thread, INFINITE);
 		CloseHandle(update_thread);
+	}
+
+	if (async_input)
+	{
+		wMessageQueue* input_queue = freerdp_get_message_queue(instance, FREERDP_INPUT_MESSAGE_QUEUE);
+		MessageQueue_PostQuit(input_queue, 0);
+		WaitForSingleObject(input_thread, INFINITE);
+		CloseHandle(input_thread);
+	}
+
+	if (async_channels)
+	{
+		WaitForSingleObject(channels_thread, INFINITE);
+		CloseHandle(channels_thread);
 	}
 
 	FILE* fin = fopen("/tmp/tsmf.tid", "rt");
@@ -1556,7 +1697,6 @@ void* xf_thread(void* param)
 	if (!exit_code)
 		exit_code = freerdp_error_info(instance);
 
-	freerdp_channels_close(channels, instance);
 	freerdp_channels_free(channels);
 	freerdp_disconnect(instance);
 	gdi_free(instance);
@@ -1613,8 +1753,7 @@ void xf_ParamChangeEventHandler(rdpContext* context, ParamChangeEventArgs* e)
 	{
 	case FreeRDP_ScalingFactor:
 
-		xfc->currentWidth = xfc->originalWidth * xfc->settings->ScalingFactor;
-		xfc->currentHeight = xfc->originalHeight * xfc->settings->ScalingFactor;
+		xf_scale_update(xfc);
 
 		xf_transform_window(xfc);
 
@@ -1622,11 +1761,11 @@ void xf_ParamChangeEventHandler(rdpContext* context, ParamChangeEventArgs* e)
 			ResizeWindowEventArgs e;
 
 			EventArgsInit(&e, "xfreerdp");
-			e.width = (int) xfc->originalWidth * xfc->settings->ScalingFactor;
-			e.height = (int) xfc->originalHeight * xfc->settings->ScalingFactor;
+			e.width = xfc->currentWidth;
+			e.height = xfc->currentHeight;
 			PubSub_OnResizeWindow(((rdpContext*) xfc)->pubSub, xfc, &e);
 		}
-		xf_draw_screen_scaled(xfc, 0, 0, 0, 0, FALSE);
+		xf_draw_transformed_region(xfc, 0, 0, 0, 0, FALSE);
 
 		break;
 
@@ -1635,7 +1774,7 @@ void xf_ParamChangeEventHandler(rdpContext* context, ParamChangeEventArgs* e)
 	}
 }
 
-void xf_ScalingFactorChangeEventHandler(rdpContext* context, ScalingFactorChangeEventArgs* e)
+static void xf_ScalingFactorChangeEventHandler(rdpContext* context, ScalingFactorChangeEventArgs* e)
 {
 	xfContext* xfc = (xfContext*) context;
 
@@ -1646,21 +1785,19 @@ void xf_ScalingFactorChangeEventHandler(rdpContext* context, ScalingFactorChange
 	if (xfc->settings->ScalingFactor < 0.8)
 		xfc->settings->ScalingFactor = 0.8;
 
-
-	xfc->currentWidth = xfc->originalWidth * xfc->settings->ScalingFactor;
-	xfc->currentHeight = xfc->originalHeight * xfc->settings->ScalingFactor;
+	xf_scale_update(xfc);
 
 	xf_transform_window(xfc);
 
 	{
-		ResizeWindowEventArgs e;
+		ResizeWindowEventArgs ev;
 
 		EventArgsInit(&e, "xfreerdp");
-		e.width = (int) xfc->originalWidth * xfc->settings->ScalingFactor;
-		e.height = (int) xfc->originalHeight * xfc->settings->ScalingFactor;
+		e.width = xfc->currentWidth;
+		e.height = xfc->currentHeight;		
 		PubSub_OnResizeWindow(((rdpContext*) xfc)->pubSub, xfc, &e);
 	}
-	xf_draw_screen_scaled(xfc, 0, 0, 0, 0, FALSE);
+	xf_draw_transformed_region(xfc, 0, 0, 0, 0, FALSE);
 
 }
 
@@ -1668,19 +1805,19 @@ void xf_ScalingFactorChangeEventHandler(rdpContext* context, ScalingFactorChange
  * Client Interface
  */
 
-void xfreerdp_client_global_init()
+static void xfreerdp_client_global_init()
 {
 	setlocale(LC_ALL, "");
 	freerdp_handle_signals();
 	freerdp_channels_global_init();
 }
 
-void xfreerdp_client_global_uninit()
+static void xfreerdp_client_global_uninit()
 {
 	freerdp_channels_global_uninit();
 }
 
-int xfreerdp_client_start(rdpContext* context)
+static int xfreerdp_client_start(rdpContext* context)
 {
 	xfContext* xfc = (xfContext*) context;
 
@@ -1692,14 +1829,17 @@ int xfreerdp_client_start(rdpContext* context)
 		return -1;
 	}
 
-	xfc->thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) xf_thread, context->instance, 0, NULL);
+	xfc->thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) xf_thread,
+			context->instance, 0, NULL);
 
 	return 0;
 }
 
-int xfreerdp_client_stop(rdpContext* context)
+static int xfreerdp_client_stop(rdpContext* context)
 {
 	xfContext* xfc = (xfContext*) context;
+
+	assert(NULL != context);
 
 	if (context->settings->AsyncInput)
 	{
@@ -1714,10 +1854,16 @@ int xfreerdp_client_stop(rdpContext* context)
 		xfc->disconnect = TRUE;
 	}
 
+	if (xfc->thread)
+	{
+		CloseHandle(xfc->thread);
+		xfc->thread = NULL;
+	}
+
 	return 0;
 }
 
-int xfreerdp_client_new(freerdp* instance, rdpContext* context)
+static int xfreerdp_client_new(freerdp* instance, rdpContext* context)
 {
 	xfContext* xfc;
 	rdpSettings* settings;
@@ -1726,6 +1872,7 @@ int xfreerdp_client_new(freerdp* instance, rdpContext* context)
 
 	instance->PreConnect = xf_pre_connect;
 	instance->PostConnect = xf_post_connect;
+	instance->PostDisconnect = xf_post_disconnect;
 	instance->Authenticate = xf_authenticate;
 	instance->VerifyCertificate = xf_verify_certificate;
 	instance->LogonErrorInfo = xf_logon_error_info;
@@ -1764,15 +1911,19 @@ int xfreerdp_client_new(freerdp* instance, rdpContext* context)
 	settings->OrderSupport[NEG_ELLIPSE_SC_INDEX] = FALSE;
 	settings->OrderSupport[NEG_ELLIPSE_CB_INDEX] = FALSE;
 
+	if(xfc->settings->PanByPix == 0)
+	  {
+		xfc->settings->PanByPix = 10;
+	  }
+
 	PubSub_SubscribeTerminate(context->pubSub, (pTerminateEventHandler) xf_TerminateEventHandler);
 	PubSub_SubscribeParamChange(context->pubSub, (pParamChangeEventHandler) xf_ParamChangeEventHandler);
 	PubSub_SubscribeScalingFactorChange(context->pubSub, (pScalingFactorChangeEventHandler) xf_ScalingFactorChangeEventHandler);
 
-
 	return 0;
 }
 
-void xfreerdp_client_free(freerdp* instance, rdpContext* context)
+static void xfreerdp_client_free(freerdp* instance, rdpContext* context)
 {
 	xfContext* xfc = (xfContext*) context;
 

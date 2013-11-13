@@ -3,6 +3,7 @@
  * X11 Client
  *
  * Copyright 2011 Marc-Andre Moreau <marcandre.moreau@gmail.com>
+ * Copyright 2013 Corey Clayton <can.of.tuna@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +22,8 @@
 #define __XFREERDP_H
 
 typedef struct xf_context xfContext;
+
+#include <freerdp/api.h>
 
 #include "xf_window.h"
 #include "xf_monitor.h"
@@ -89,6 +92,7 @@ struct xf_context
 	BOOL unobscured;
 	BOOL debug;
 	xfWindow* window;
+	xfPointer* pointer;
 	xfWorkArea workArea;
 	int current_desktop;
 	BOOL remote_app;
@@ -96,6 +100,7 @@ struct xf_context
 	HCLRCONV clrconv;
 	HANDLE mutex;
 	BOOL UseXThreads;
+	BOOL cursorHidden;
 
 	HGDI_DC hdc;
 	BYTE* primary_buffer;
@@ -106,7 +111,6 @@ struct xf_context
 	UINT16 frame_x2;
 	UINT16 frame_y2;
 
-	//double scale;
 	int originalWidth;
 	int originalHeight;
 	int currentWidth;
@@ -116,6 +120,8 @@ struct xf_context
 
 	int offset_x;
 	int offset_y;
+
+	BOOL supress_mouse;
 
 	BOOL focused;
 	BOOL use_xinput;
@@ -211,10 +217,11 @@ enum XF_EXIT_CODE
 void xf_lock_x11(xfContext* xfc, BOOL display);
 void xf_unlock_x11(xfContext* xfc, BOOL display);
 
-void xf_draw_screen_scaled(xfContext* xfc, int x, int y, int w, int h, BOOL scale);
+void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL scale);
 void xf_transform_window(xfContext* xfc);
+void xf_scale_update(xfContext* xfc);
 
-DWORD xf_exit_code_from_disconnect_reason(DWORD reason);
+FREERDP_API DWORD xf_exit_code_from_disconnect_reason(DWORD reason);
 
 #endif /* __XFREERDP_H */
 

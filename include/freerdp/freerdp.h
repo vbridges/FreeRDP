@@ -57,6 +57,7 @@ typedef void (*pContextFree)(freerdp* instance, rdpContext* context);
 
 typedef BOOL (*pPreConnect)(freerdp* instance);
 typedef BOOL (*pPostConnect)(freerdp* instance);
+typedef void (*pPostDisconnect)(freerdp* instance);
 typedef BOOL (*pAuthenticate)(freerdp* instance, char** username, char** password, char** domain);
 typedef BOOL (*pVerifyCertificate)(freerdp* instance, char* subject, char* issuer, char* fingerprint);
 typedef BOOL (*pVerifyChangedCertificate)(freerdp* instance, char* subject, char* issuer, char* new_fingerprint, char* old_fingerprint);
@@ -81,7 +82,9 @@ struct rdp_context
 						   Pointer to the client peer.
 						   This is set by a call to freerdp_peer_context_new() during peer initialization.
 						   This field is used only on the server side. */
-	UINT64 paddingA[16 - 2]; /* 2 */
+	ALIGN64 BOOL ServerMode; /**< (offset 2) true when context is in server mode */
+
+	UINT64 paddingA[16 - 3]; /* 3 */
 
 	ALIGN64 int argc;	/**< (offset 16)
 				   Number of arguments given to the program at launch time.
@@ -194,7 +197,11 @@ struct rdp_freerdp
 
 	ALIGN64 pLogonErrorInfo LogonErrorInfo; /**< (offset 53)  Callback for logon error info, important for logon system messages with RemoteApp */
 
-	UINT64 paddingD[64 - 54]; /* 54 */
+	ALIGN64 pPostDisconnect PostDisconnect; /**< (offset 54)
+																						Callback for cleaning up resources allocated
+																						by connect callbacks. */
+
+	UINT64 paddingD[64 - 55]; /* 55 */
 
 	ALIGN64 pSendChannelData SendChannelData; /* (offset 64)
 										 Callback for sending data to a channel.

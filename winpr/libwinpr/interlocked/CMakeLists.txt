@@ -22,7 +22,11 @@ set(${MODULE_PREFIX}_SRCS
 	interlocked.c)
 
 if(MSVC AND (NOT MONOLITHIC_BUILD))
-	set(${MODULE_PREFIX}_SRCS ${${MODULE_PREFIX}_SRCS} module.def)
+	if (${CMAKE_SYSTEM_VERSION} GREATER "5.1")
+		set(${MODULE_PREFIX}_SRCS ${${MODULE_PREFIX}_SRCS} module.def)
+	else()
+		set(${MODULE_PREFIX}_SRCS ${${MODULE_PREFIX}_SRCS} module_5.1.def)
+	endif()
 endif()
 
 add_complex_library(MODULE ${MODULE_NAME} TYPE "OBJECT"
@@ -34,13 +38,13 @@ set_target_properties(${MODULE_NAME} PROPERTIES VERSION ${WINPR_VERSION_FULL} SO
 set_complex_link_libraries(VARIABLE ${MODULE_PREFIX}_LIBS
 	MONOLITHIC ${MONOLITHIC_BUILD} INTERNAL
 	MODULE winpr
-	MODULES winpr-crt winpr-handle winpr-synch)
+	MODULES winpr-crt winpr-handle)
 
 if(MONOLITHIC_BUILD)
 
 else()
 	target_link_libraries(${MODULE_NAME} ${${MODULE_PREFIX}_LIBS})
-	install(TARGETS ${MODULE_NAME} DESTINATION ${CMAKE_INSTALL_LIBDIR})
+	install(TARGETS ${MODULE_NAME} DESTINATION ${CMAKE_INSTALL_LIBDIR} EXPORT WinPRTargets)
 endif()
 
 set_property(TARGET ${MODULE_NAME} PROPERTY FOLDER "WinPR")

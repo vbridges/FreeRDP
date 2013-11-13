@@ -69,7 +69,7 @@ BOOL MessageQueue_Wait(wMessageQueue* queue)
 
 void MessageQueue_Dispatch(wMessageQueue* queue, wMessage* message)
 {
-	WaitForSingleObject(queue->mutex, INFINITE);
+	EnterCriticalSection(&queue->lock);
 
 	if (queue->size == queue->capacity)
 	{
@@ -100,7 +100,7 @@ void MessageQueue_Dispatch(wMessageQueue* queue, wMessage* message)
 	if (queue->size > 0)
 		SetEvent(queue->event);
 
-	ReleaseMutex(queue->mutex);
+	LeaveCriticalSection(&queue->lock);
 }
 
 void MessageQueue_Post(wMessageQueue* queue, void* context, UINT32 type, void* wParam, void* lParam)
@@ -127,7 +127,7 @@ int MessageQueue_Get(wMessageQueue* queue, wMessage* message)
 	if (!MessageQueue_Wait(queue))
 		return status;
 
-	WaitForSingleObject(queue->mutex, INFINITE);
+	EnterCriticalSection(&queue->lock);
 
 	if (queue->size > 0)
 	{
@@ -142,7 +142,7 @@ int MessageQueue_Get(wMessageQueue* queue, wMessage* message)
 		status = (message->id != WMQ_QUIT) ? 1 : 0;
 	}
 
-	ReleaseMutex(queue->mutex);
+	LeaveCriticalSection(&queue->lock);
 
 	return status;
 }
@@ -151,7 +151,7 @@ int MessageQueue_Peek(wMessageQueue* queue, wMessage* message, BOOL remove)
 {
 	int status = 0;
 
-	WaitForSingleObject(queue->mutex, INFINITE);
+	EnterCriticalSection(&queue->lock);
 
 	if (queue->size > 0)
 	{
@@ -169,7 +169,7 @@ int MessageQueue_Peek(wMessageQueue* queue, wMessage* message, BOOL remove)
 		}
 	}
 
-	ReleaseMutex(queue->mutex);
+	LeaveCriticalSection(&queue->lock);
 
 	return status;
 }
@@ -178,7 +178,7 @@ int MessageQueue_Peek(wMessageQueue* queue, wMessage* message, BOOL remove)
  * Construction, Destruction
  */
 
-wMessageQueue* MessageQueue_New()
+wMessageQueue* MessageQueue_New(const wObject *callback)
 {
 	wMessageQueue* queue = NULL;
 
@@ -194,8 +194,13 @@ wMessageQueue* MessageQueue_New()
 		queue->array = (wMessage*) malloc(sizeof(wMessage) * queue->capacity);
 		ZeroMemory(queue->array, sizeof(wMessage) * queue->capacity);
 
-		queue->mutex = CreateMutex(NULL, FALSE, NULL);
+		InitializeCriticalSectionAndSpinCount(&queue->lock, 4000);
 		queue->event = CreateEvent(NULL, TRUE, FALSE, NULL);
+
+		if (callback)
+			queue->object = *callback;
+		else
+			ZeroMemory(&queue->object, sizeof(queue->object));
 	}
 
 	return queue;
@@ -204,8 +209,37 @@ wMessageQueue* MessageQueue_New()
 void MessageQueue_Free(wMessageQueue* queue)
 {
 	CloseHandle(queue->event);
-	CloseHandle(queue->mutex);
+	DeleteCriticalSection(&queue->lock);
 
 	free(queue->array);
 	free(queue);
 }
+
+int MessageQueue_Clear(wMessageQueue *queue)
+{
+	int status = 0;
+
+	EnterCriticalSection(&queue->lock);
+
+	while(queue->size > 0)
+	{
+		wMessage *msg = &(queue->array[queue->head]);
+
+		/* Free resources of message. */
+		if (queue->object.fnObjectUninit)
+			queue->object.fnObjectUninit(msg);
+		if (queue->object.fnObjectFree)
+			queue->object.fnObjectFree(msg);
+
+		ZeroMemory(msg, sizeof(wMessage));
+
+		queue->head = (queue->head + 1) % queue->capacity;
+		queue->size--;
+	}
+	ResetEvent(queue->event);
+
+	LeaveCriticalSection(&queue->lock);
+
+	return status;
+}
+

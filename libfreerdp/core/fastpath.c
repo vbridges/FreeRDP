@@ -178,7 +178,7 @@ static BOOL fastpath_recv_update_common(rdpFastPath* fastpath, wStream* s)
 	switch (updateType)
 	{
 		case UPDATE_TYPE_BITMAP:
-			if (!update_read_bitmap(update, s, &update->bitmap_update))
+			if (!update_read_bitmap_update(update, s, &update->bitmap_update))
 				return FALSE;
 			IFCALL(update->BitmapUpdate, context, &update->bitmap_update);
 			break;
@@ -711,6 +711,14 @@ BOOL fastpath_send_multiple_input_pdu(rdpFastPath* fastpath, wStream* s, int iNu
 	BYTE eventHeader;
 	int sec_bytes;
 
+	/*
+	 *  A maximum of 15 events are allowed per request
+	 *  if the optional numEvents field isn't used
+	 *  see MS-RDPBCGR 2.2.8.1.2 for details
+	 */
+	if (iNumEvents > 15)
+		return FALSE;
+
 	rdp = fastpath->rdp;
 
 	length = Stream_GetPosition(s);
@@ -722,7 +730,7 @@ BOOL fastpath_send_multiple_input_pdu(rdpFastPath* fastpath, wStream* s, int iNu
 	}
 
 	eventHeader = FASTPATH_INPUT_ACTION_FASTPATH;
-	eventHeader |= (1 << 2); /* numberEvents */
+	eventHeader |= (iNumEvents << 2); /* numberEvents */
 
 	if (rdp->sec_flags & SEC_ENCRYPT)
 		eventHeader |= (FASTPATH_INPUT_ENCRYPTED << 6);
@@ -856,6 +864,8 @@ BOOL fastpath_send_update_pdu(rdpFastPath* fastpath, BYTE updateCode, wStream* s
 					comp_flags = FASTPATH_OUTPUT_COMPRESSION_USED;
 					header_bytes = 7 + sec_bytes;
 					bm = (BYTE*) (rdp->mppc_enc->outputBuffer - header_bytes);
+					if (comp_update)
+						Stream_Free(comp_update, FALSE);
 					comp_update = Stream_New(bm, pdu_data_bytes + header_bytes);
 					ls = comp_update;
 				}
@@ -902,6 +912,8 @@ BOOL fastpath_send_update_pdu(rdpFastPath* fastpath, BYTE updateCode, wStream* s
 
 		Stream_Write_UINT16(ls, pdu_data_bytes);
 
+		if (update)
+			Stream_Free(update, FALSE);
 		update = Stream_New(bm, pduLength);
 		Stream_Seek(update, pduLength);
 

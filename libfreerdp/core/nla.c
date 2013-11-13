@@ -113,18 +113,39 @@ int credssp_ntlm_client_init(rdpCredssp* credssp)
 {
 	char* spn;
 	int length;
+	BOOL PromptPassword;
+	rdpTls* tls = NULL;
 	freerdp* instance;
 	rdpSettings* settings;
 
+	PromptPassword = FALSE;
 	settings = credssp->settings;
 	instance = (freerdp*) settings->instance;
 
-	if ((settings->Password == NULL) || (settings->Username == NULL))
+	if ((!settings->Password) || (!settings->Username)
+			|| (!strlen(settings->Password)) || (!strlen(settings->Username)))
+	{
+		PromptPassword = TRUE;
+	}
+
+#ifndef _WIN32
+	if (PromptPassword)
+	{
+		if (settings->RestrictedAdminModeRequired)
+		{
+			if ((settings->PasswordHash) && (strlen(settings->PasswordHash) > 0))
+				PromptPassword = FALSE;
+		}
+	}
+#endif
+
+	if (PromptPassword)
 	{
 		if (instance->Authenticate)
 		{
 			BOOL proceed = instance->Authenticate(instance,
 					&settings->Username, &settings->Password, &settings->Domain);
+
 			if (!proceed)
 				return 0;
 		}
@@ -132,13 +153,54 @@ int credssp_ntlm_client_init(rdpCredssp* credssp)
 
 	sspi_SetAuthIdentity(&(credssp->identity), settings->Username, settings->Domain, settings->Password);
 
+#ifndef _WIN32
+	{
+		SEC_WINNT_AUTH_IDENTITY* identity = &(credssp->identity);
+
+		if (settings->RestrictedAdminModeRequired)
+		{
+			if (settings->PasswordHash)
+			{
+				if (strlen(settings->PasswordHash) == 32)
+				{
+					if (identity->Password)
+						free(identity->Password);
+
+					identity->PasswordLength = ConvertToUnicode(CP_UTF8, 0,
+							settings->PasswordHash, -1, &identity->Password, 0) - 1;
+
+					/**
+					 * Multiply password hash length by 64 to obtain a length exceeding
+					 * the maximum (256) and use it this for hash identification in WinPR.
+					 */
+					identity->PasswordLength = 32 * 64; /* 2048 */
+				}
+			}
+		}
+	}
+#endif
+
 #ifdef WITH_DEBUG_NLA
 	_tprintf(_T("User: %s Domain: %s Password: %s\n"),
 		(char*) credssp->identity.User, (char*) credssp->identity.Domain, (char*) credssp->identity.Password);
 #endif
 
-	sspi_SecBufferAlloc(&credssp->PublicKey, credssp->transport->TlsIn->PublicKeyLength);
-	CopyMemory(credssp->PublicKey.pvBuffer, credssp->transport->TlsIn->PublicKey, credssp->transport->TlsIn->PublicKeyLength);
+	if (credssp->transport->layer == TRANSPORT_LAYER_TLS)
+	{
+		tls = credssp->transport->TlsIn;
+	}
+	else if (credssp->transport->layer == TRANSPORT_LAYER_TSG_TLS)
+	{
+		tls = credssp->transport->TsgTls;
+	}
+	else
+	{
+		fprintf(stderr, "Unknown NLA transport layer\n");
+		return 0;
+	}
+
+	sspi_SecBufferAlloc(&credssp->PublicKey, tls->PublicKeyLength);
+	CopyMemory(credssp->PublicKey.pvBuffer, tls->PublicKey, tls->PublicKeyLength);
 
 	length = sizeof(TERMSRV_SPN_PREFIX) + strlen(settings->ServerHostname);
 
@@ -718,7 +780,7 @@ SECURITY_STATUS credssp_decrypt_public_key_echo(rdpCredssp* credssp)
 {
 	int length;
 	BYTE* buffer;
-	ULONG pfQOP;
+	ULONG pfQOP = 0;
 	BYTE* public_key1;
 	BYTE* public_key2;
 	int public_key_length;
@@ -923,12 +985,33 @@ void credssp_encode_ts_credentials(rdpCredssp* credssp)
 {
 	wStream* s;
 	int length;
+	int DomainLength;
+	int UserLength;
+	int PasswordLength;
+
+	DomainLength = credssp->identity.DomainLength;
+	UserLength = credssp->identity.UserLength;
+	PasswordLength = credssp->identity.PasswordLength;
+
+	if (credssp->settings->RestrictedAdminModeRequired)
+	{
+		credssp->identity.DomainLength = 0;
+		credssp->identity.UserLength = 0;
+		credssp->identity.PasswordLength = 0;
+	}
 
 	length = ber_sizeof_sequence(credssp_sizeof_ts_credentials(credssp));
 	sspi_SecBufferAlloc(&credssp->ts_credentials, length);
 
 	s = Stream_New(credssp->ts_credentials.pvBuffer, length);
 	credssp_write_ts_credentials(credssp, s);
+
+	if (credssp->settings->RestrictedAdminModeRequired)
+	{
+		credssp->identity.DomainLength = DomainLength;
+		credssp->identity.UserLength = UserLength;
+		credssp->identity.PasswordLength = PasswordLength;
+	}
 
 	Stream_Free(s, FALSE);
 }
@@ -1145,7 +1228,10 @@ int credssp_recv(rdpCredssp* credssp)
 	if(!ber_read_sequence_tag(s, &length) ||
 		!ber_read_contextual_tag(s, 0, &length, TRUE) ||
 		!ber_read_integer(s, &version))
+	{
+		Stream_Free(s, TRUE);
 		return -1;
+	}
 
 	/* [1] negoTokens (NegoData) */
 	if (ber_read_contextual_tag(s, 1, &length, TRUE) != FALSE)
@@ -1155,7 +1241,10 @@ int credssp_recv(rdpCredssp* credssp)
 			!ber_read_contextual_tag(s, 0, &length, TRUE) || /* [0] negoToken */
 			!ber_read_octet_string_tag(s, &length) || /* OCTET STRING */
 			Stream_GetRemainingLength(s) < length)
+		{
+			Stream_Free(s, TRUE);
 			return -1;
+		}
 		sspi_SecBufferAlloc(&credssp->negoToken, length);
 		Stream_Read(s, credssp->negoToken.pvBuffer, length);
 		credssp->negoToken.cbBuffer = length;
@@ -1166,7 +1255,10 @@ int credssp_recv(rdpCredssp* credssp)
 	{
 		if(!ber_read_octet_string_tag(s, &length) || /* OCTET STRING */
 			Stream_GetRemainingLength(s) < length)
+		{
+			Stream_Free(s, TRUE);
 			return -1;
+		}
 		sspi_SecBufferAlloc(&credssp->authInfo, length);
 		Stream_Read(s, credssp->authInfo.pvBuffer, length);
 		credssp->authInfo.cbBuffer = length;
@@ -1177,7 +1269,10 @@ int credssp_recv(rdpCredssp* credssp)
 	{
 		if(!ber_read_octet_string_tag(s, &length) || /* OCTET STRING */
 			Stream_GetRemainingLength(s) < length)
+		{
+			Stream_Free(s, TRUE);
 			return -1;
+		}
 		sspi_SecBufferAlloc(&credssp->pubKeyAuth, length);
 		Stream_Read(s, credssp->pubKeyAuth.pvBuffer, length);
 		credssp->pubKeyAuth.cbBuffer = length;

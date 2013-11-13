@@ -25,6 +25,10 @@
 #include "config.h"
 #endif
 
+#include <winpr/crt.h>
+#include <winpr/wlog.h>
+#include <winpr/collections.h>
+
 #include <freerdp/utils/debug.h>
 #include <freerdp/utils/profiler.h>
 
@@ -33,8 +37,12 @@
 
 struct _NSC_CONTEXT_PRIV
 {
-	BYTE* plane_buf[5];		/* Decompressed Plane Buffers in the respective order */
-	UINT32 plane_buf_length;	/* Lengths of each plane buffer */
+	wLog* log;
+
+	wBufferPool* PlanePool;
+
+	BYTE* PlaneBuffers[5];		/* Decompressed Plane Buffers in the respective order */
+	UINT32 PlaneBuffersLength;	/* Lengths of each plane buffer */
 
 	/* profilers */
 	PROFILER_DEFINE(prof_nsc_rle_decompress_data);

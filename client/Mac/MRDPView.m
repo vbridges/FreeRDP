@@ -42,6 +42,8 @@
  *  -
  */
 
+#include <winpr/windows.h>
+
 #include "mf_client.h"
 #import "mfreerdp.h"
 #import "MRDPView.h"
@@ -63,7 +65,6 @@
 #import "freerdp/client/file.h"
 #import "freerdp/client/cmdline.h"
 
-
 /******************************************
  Forward declarations
  ******************************************/
@@ -80,11 +81,9 @@ void mac_bitmap_update(rdpContext* context, BITMAP_UPDATE* bitmap);
 void mac_begin_paint(rdpContext* context);
 void mac_end_paint(rdpContext* context);
 void mac_save_state_info(freerdp* instance, rdpContext* context);
-static void update_activity_cb(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
-static void input_activity_cb(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
-static void channel_activity_cb(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info);
-int register_update_fds(freerdp* instance);
-int register_input_fds(freerdp* instance);
+static void update_activity_cb(freerdp* instance);
+static void input_activity_cb(freerdp* instance);
+static void channel_activity_cb(freerdp* instance);
 int invoke_draw_rect(rdpContext* context);
 int process_plugin_args(rdpSettings* settings, const char* name, RDP_PLUGIN_DATA* plugin_data, void* user_data);
 int receive_channel_data(freerdp* instance, int chan_id, BYTE* data, int size, int flags, int total_size);
@@ -97,6 +96,9 @@ void cliprdr_process_cb_data_response_event(freerdp* instance, RDP_CB_DATA_RESPO
 void cliprdr_process_text(freerdp* instance, BYTE* data, int len);
 void cliprdr_send_supported_format_list(freerdp* instance);
 int register_channel_fds(int* fds, int count, freerdp* instance);
+
+
+DWORD mac_client_thread(void* param);
 
 struct cursor
 {
@@ -121,12 +123,10 @@ struct rgba_data
 
 - (int) rdpStart:(rdpContext*) rdp_context
 {
-	int status;
-	mfContext* mfc;
 	rdpSettings* settings;
 	EmbedWindowEventArgs e;
 
-    [self initializeView];
+	[self initializeView];
 
 	context = rdp_context;
 	mfc = (mfContext*) rdp_context;
@@ -138,29 +138,107 @@ struct rgba_data
 	e.handle = (void*) self;
 	PubSub_OnEmbedWindow(context->pubSub, context, &e);
 
-    status = freerdp_connect(context->instance);
-	
-	if (!status)
+	NSScreen *screen = [[NSScreen screens] objectAtIndex:0];
+	NSRect screenFrame = [screen frame];
+
+	if(instance->settings->Fullscreen)
 	{
-		[self setIs_connected:0];
-		[self rdpConnectError];
-		return 1;
+		instance->settings->DesktopWidth  = screenFrame.size.width;
+		instance->settings->DesktopHeight = screenFrame.size.height;
 	}
 
-	/* register update message queue with the RunLoop */
-	register_update_fds(context->instance);
+	mfc->client_height = instance->settings->DesktopHeight;
+	mfc->client_width = instance->settings->DesktopWidth;
 
-	/* register update message queue with the RunLoop */
-	register_input_fds(context->instance);
-
-	/* register channel events with the RunLoop */
-	register_channels_fds(context->instance);
-
-	freerdp_check_fds(context->instance);
-
-	[self setIs_connected:1];
-
+	mfc->thread = CreateThread(NULL, 0, mac_client_thread, (void*) context, 0, &mfc->mainThreadId);
+	
 	return 0;
+}
+
+DWORD mac_client_thread(void* param)
+{
+	@autoreleasepool
+	{
+		int status;
+		HANDLE events[4];
+		HANDLE input_event;
+		HANDLE update_event;
+		HANDLE channels_event;
+		
+		DWORD nCount;
+		rdpContext* context = (rdpContext*) param;
+		mfContext* mfc = (mfContext*) context;
+		freerdp* instance = context->instance;
+		MRDPView* view = mfc->view;
+		rdpSettings* settings = context->settings;
+		
+		status = freerdp_connect(context->instance);
+		
+		if (!status)
+		{
+			[view setIs_connected:0];
+			return 0;
+		}
+		
+		[view setIs_connected:1];
+		
+		nCount = 0;
+		
+		events[nCount++] = mfc->stopEvent;
+		
+		if (settings->AsyncUpdate)
+		{
+			events[nCount++] = update_event = freerdp_get_message_queue_event_handle(instance, FREERDP_UPDATE_MESSAGE_QUEUE);
+		}
+		
+		if (settings->AsyncInput)
+		{
+			events[nCount++] = input_event = freerdp_get_message_queue_event_handle(instance, FREERDP_INPUT_MESSAGE_QUEUE);
+		}
+		
+		if (settings->AsyncChannels)
+		{
+			events[nCount++] = channels_event = freerdp_channels_get_event_handle(instance);
+		}
+		
+		while (1)
+		{
+			status = WaitForMultipleObjects(nCount, events, FALSE, INFINITE);
+			
+			if (WaitForSingleObject(mfc->stopEvent, 0) == WAIT_OBJECT_0)
+			{
+				freerdp_disconnect(instance);
+				break;
+			}
+			
+			if (settings->AsyncUpdate)
+			{
+				if (WaitForSingleObject(update_event, 0) == WAIT_OBJECT_0)
+				{
+					update_activity_cb(instance);
+				}
+			}
+			
+			if (settings->AsyncInput)
+			{
+				if (WaitForSingleObject(input_event, 0) == WAIT_OBJECT_0)
+				{
+					input_activity_cb(instance);
+				}
+			}
+			
+			if (settings->AsyncChannels)
+			{
+				if (WaitForSingleObject(channels_event, 0) == WAIT_OBJECT_0)
+				{
+					channel_activity_cb(instance);
+				}
+			}
+		}
+		
+		ExitThread(0);
+		return 0;
+	}
 }
 
 /************************************************************************
@@ -173,7 +251,7 @@ struct rgba_data
 
 - (id)initWithFrame:(NSRect)frame
 {
-    self = [super initWithFrame:frame];
+	self = [super initWithFrame:frame];
 	
 	if (self)
 	{
@@ -191,32 +269,38 @@ struct rgba_data
 //       won't be called if the view is created dynamically
 - (void) viewDidLoad
 {
-    [self initializeView];
+	[self initializeView];
 }
 
 - (void) initializeView
 {
-    if (!initialized)
-    {
-        // store our window dimensions
-        width = [self frame].size.width;
-        height = [self frame].size.height;
-        titleBarHeight = 22;
+	if (!initialized)
+	{
+		cursors = [[NSMutableArray alloc] initWithCapacity:10];
 
-        [[self window] becomeFirstResponder];
-        [[self window] setAcceptsMouseMovedEvents:YES];
+		// setup a mouse tracking area
+		NSTrackingArea * trackingArea = [[NSTrackingArea alloc] initWithRect:[self visibleRect] options:NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved | NSTrackingCursorUpdate | NSTrackingEnabledDuringMouseDrag | NSTrackingActiveWhenFirstResponder owner:self userInfo:nil];
 
-        cursors = [[NSMutableArray alloc] initWithCapacity:10];
+		[self addTrackingArea:trackingArea];
 
-        // setup a mouse tracking area
-        NSTrackingArea * trackingArea = [[NSTrackingArea alloc] initWithRect:[self visibleRect] options:NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved | NSTrackingCursorUpdate | NSTrackingEnabledDuringMouseDrag | NSTrackingActiveWhenFirstResponder owner:self userInfo:nil];
+		// Set the default cursor
+		currentCursor = [NSCursor arrowCursor];
 
-        [self addTrackingArea:trackingArea];
+		initialized = YES;
+	}
+}
 
-        mouseInClientArea = YES;
+- (void) setCursor: (NSCursor*) cursor
+{
+	self->currentCursor = cursor;
+	[[self window] invalidateCursorRectsForView:self];
+}
 
-        initialized = YES;
-    }
+
+// Set the current cursor
+- (void) resetCursorRects
+{
+	[self addCursorRect:[self visibleRect] cursor:currentCursor];
 }
 
 /** *********************************************************************
@@ -251,11 +335,8 @@ struct rgba_data
 	NSPoint loc = [event locationInWindow];
 	int x = (int) loc.x;
 	int y = (int) loc.y;
-	
-	y = height - y;
-	
-	// send mouse motion event to RDP server
-	instance->input->MouseEvent(instance->input, PTR_FLAGS_MOVE, x, y);
+
+	mf_scale_mouse_event(context, instance->input, PTR_FLAGS_MOVE, x, y);
 }
 
 /** *********************************************************************
@@ -273,9 +354,7 @@ struct rgba_data
 	int x = (int) loc.x;
 	int y = (int) loc.y;
 	
-	y = height - y;
-	
-	instance->input->MouseEvent(instance->input, PTR_FLAGS_DOWN | PTR_FLAGS_BUTTON1, x, y);
+	mf_scale_mouse_event(context, instance->input, PTR_FLAGS_DOWN | PTR_FLAGS_BUTTON1, x, y);
 }
 
 /** *********************************************************************
@@ -293,9 +372,7 @@ struct rgba_data
 	int x = (int) loc.x;
 	int y = (int) loc.y;
 	
-	y = height - y;
-	
-	instance->input->MouseEvent(instance->input, PTR_FLAGS_BUTTON1, x, y);
+	mf_scale_mouse_event(context, instance->input, PTR_FLAGS_BUTTON1, x, y);
 }
 
 /** *********************************************************************
@@ -313,9 +390,7 @@ struct rgba_data
 	int x = (int) loc.x;
 	int y = (int) loc.y;
 	
-	y = height - y;
-	
-	instance->input->MouseEvent(instance->input, PTR_FLAGS_DOWN | PTR_FLAGS_BUTTON2, x, y);
+	mf_scale_mouse_event(context, instance->input, PTR_FLAGS_DOWN | PTR_FLAGS_BUTTON2, x, y);
 }
 
 /** *********************************************************************
@@ -333,9 +408,7 @@ struct rgba_data
 	int x = (int) loc.x;
 	int y = (int) loc.y;
 	
-	y = height - y;
-	
-	instance->input->MouseEvent(instance->input, PTR_FLAGS_BUTTON2, x, y);
+	mf_scale_mouse_event(context, instance->input, PTR_FLAGS_BUTTON2, x, y);
 }
 
 /** *********************************************************************
@@ -353,9 +426,7 @@ struct rgba_data
 	int x = (int) loc.x;
 	int y = (int) loc.y;
 	
-	y = height - y;
-	
-	instance->input->MouseEvent(instance->input, PTR_FLAGS_DOWN | PTR_FLAGS_BUTTON3, x, y);
+	mf_scale_mouse_event(context, instance->input, PTR_FLAGS_DOWN | PTR_FLAGS_BUTTON3, x, y);
 }
 
 /** *********************************************************************
@@ -373,9 +444,7 @@ struct rgba_data
 	int x = (int) loc.x;
 	int y = (int) loc.y;
 	
-	y = height - y;
-	
-	instance->input->MouseEvent(instance->input, PTR_FLAGS_BUTTON3, x, y);
+	mf_scale_mouse_event(context, instance->input, PTR_FLAGS_BUTTON3, x, y);
 }
 
 - (void) scrollWheel:(NSEvent *)event
@@ -391,19 +460,20 @@ struct rgba_data
 	int x = (int) loc.x;
 	int y = (int) loc.y;
 	
-	y = height - y;
-	
 	flags = PTR_FLAGS_WHEEL;
-	
-	if ([event deltaY] < 0)
-		flags |= PTR_FLAGS_WHEEL_NEGATIVE | 0x0088;
-	else
-		flags |= 0x0078;
-	
-	x += (int) [event deltaX];
-	y += (int) [event deltaY];
-	
-	instance->input->MouseEvent(instance->input, flags, x, y);
+
+	/* 1 event = 120 units */
+	int units = [event deltaY] * 120;
+
+	/* send out all accumulated rotations */
+	while(units != 0)
+	{
+		/* limit to maximum value in WheelRotationMask (9bit signed value) */
+		int step = MIN(MAX(-256, units), 255);
+
+		mf_scale_mouse_event(context, instance->input, flags | ((UINT16)step & WheelRotationMask), x, y);
+		units -= step;
+	}
 }
 
 /** *********************************************************************
@@ -422,10 +492,8 @@ struct rgba_data
 	int x = (int) loc.x;
 	int y = (int) loc.y;
 	
-	y = height - y;
-	
 	// send mouse motion event to RDP server
-	instance->input->MouseEvent(instance->input, PTR_FLAGS_MOVE, x, y);
+	mf_scale_mouse_event(context, instance->input, PTR_FLAGS_MOVE, x, y);
 }
 
 /** *********************************************************************
@@ -435,20 +503,28 @@ struct rgba_data
 - (void) keyDown:(NSEvent *) event
 {
 	int key;
-	USHORT extended;
+	DWORD keyFlags;
 	DWORD vkcode;
 	DWORD scancode;
 	
 	if (!is_connected)
 		return;
 	
+	keyFlags = KBD_FLAGS_DOWN;
 	key = [event keyCode] + 8;
 	
 	vkcode = GetVirtualKeyCodeFromKeycode(key, KEYCODE_TYPE_APPLE);
 	scancode = GetVirtualScanCodeFromVirtualKeyCode(vkcode, 4);
-	extended = (scancode & KBDEXT) ? KBDEXT : 0;
+	keyFlags |= (scancode & KBDEXT) ? KBDEXT : 0;
+	scancode &= 0xFF;
+	vkcode &= 0xFF;
+
+#if 0
+	fprintf(stderr, "keyDown: key: 0x%04X scancode: 0x%04X vkcode: 0x%04X keyFlags: %d name: %s\n",
+	       key - 8, scancode, vkcode, keyFlags, GetVirtualKeyName(vkcode));
+#endif
 	
-	instance->input->KeyboardEvent(instance->input, extended | KBD_FLAGS_DOWN, scancode & 0xFF);
+	freerdp_input_send_keyboard_event(instance->input, keyFlags, scancode);
 }
 
 /** *********************************************************************
@@ -458,20 +534,28 @@ struct rgba_data
 - (void) keyUp:(NSEvent *) event
 {
 	int key;
-	USHORT extended;
+	DWORD keyFlags;
 	DWORD vkcode;
 	DWORD scancode;
-	
+
 	if (!is_connected)
 		return;
-	
+
 	key = [event keyCode] + 8;
-	
+	keyFlags = KBD_FLAGS_RELEASE;
+
 	vkcode = GetVirtualKeyCodeFromKeycode(key, KEYCODE_TYPE_APPLE);
 	scancode = GetVirtualScanCodeFromVirtualKeyCode(vkcode, 4);
-	extended = (scancode & KBDEXT) ? KBDEXT : 0;
-	
-	instance->input->KeyboardEvent(instance->input, extended | KBD_FLAGS_RELEASE, scancode & 0xFF);
+	keyFlags |= (scancode & KBDEXT) ? KBDEXT : 0;
+	scancode &= 0xFF;
+	vkcode &= 0xFF;
+
+#if 0
+	fprintf(stderr, "keyUp: key: 0x%04X scancode: 0x%04X vkcode: 0x%04X keyFlags: %d name: %s\n",
+	       key - 8, scancode, vkcode, keyFlags, GetVirtualKeyName(vkcode));
+#endif
+
+	freerdp_input_send_keyboard_event(instance->input, keyFlags, scancode);
 }
 
 /** *********************************************************************
@@ -480,121 +564,93 @@ struct rgba_data
 
 - (void) flagsChanged:(NSEvent*) event
 {
-	NSUInteger mf = [event modifierFlags];
-	
+	int key;
+	DWORD keyFlags;
+	DWORD vkcode;
+	DWORD scancode;
+	DWORD modFlags;
+
 	if (!is_connected)
 		return;
-	
-	// caps lock
-	if (mf == 0x10100) {
-		printf("TODO: caps lock is on\n");
-		kdcapslock = 1;
-	}
-	if (kdcapslock && (mf == 0x100)) {
-		kdcapslock = 0;
-		printf("TODO: caps lock is off\n");
-	}
-	// left shift
-	if ((kdlshift == 0) && ((mf & 2) != 0)) {
-		// left shift went down
-		instance->input->KeyboardEvent(instance->input, KBD_FLAGS_DOWN, 0x2a);
-		kdlshift = 1;
-	}
-	if ((kdlshift != 0) && ((mf & 2) == 0)) {
-		// left shift went up
-		instance->input->KeyboardEvent(instance->input, KBD_FLAGS_RELEASE, 0x2a);
-		kdlshift = 0;
-	}
-	
-	// right shift
-	if ((kdrshift == 0) && ((mf & 4) != 0)) {
-		// right shift went down
-		instance->input->KeyboardEvent(instance->input, KBD_FLAGS_DOWN, 0x36);
-		kdrshift = 1;
-	}
-	if ((kdrshift != 0) && ((mf & 4) == 0)) {
-		// right shift went up
-		instance->input->KeyboardEvent(instance->input, KBD_FLAGS_RELEASE, 0x36);
-		kdrshift = 0;
-	}
-	
-	// left ctrl
-	if ((kdlctrl == 0) && ((mf & 1) != 0)) {
-		// left ctrl went down
-		instance->input->KeyboardEvent(instance->input, KBD_FLAGS_DOWN, 0x1d);
-		kdlctrl = 1;
-	}
-	if ((kdlctrl != 0) && ((mf & 1) == 0)) {
-		// left ctrl went up
-		instance->input->KeyboardEvent(instance->input, KBD_FLAGS_RELEASE, 0x1d);
-		kdlctrl = 0;
-	}
-	
-	// right ctrl
-	if ((kdrctrl == 0) && ((mf & 0x2000) != 0)) {
-		// right ctrl went down
-		instance->input->KeyboardEvent(instance->input, 1 | KBD_FLAGS_DOWN, 0x1d);
-		kdrctrl = 1;
-	}
-	if ((kdrctrl != 0) && ((mf & 0x2000) == 0)) {
-		// right ctrl went up
-		instance->input->KeyboardEvent(instance->input, 1 | KBD_FLAGS_RELEASE, 0x1d);
-		kdrctrl = 0;
-	}
-	
-	// left alt
-	if ((kdlalt == 0) && ((mf & 0x20) != 0)) {
-		// left alt went down
-		instance->input->KeyboardEvent(instance->input, KBD_FLAGS_DOWN, 0x38);
-		kdlalt = 1;
-	}
-	if ((kdlalt != 0) && ((mf & 0x20) == 0)) {
-		// left alt went up
-		instance->input->KeyboardEvent(instance->input, KBD_FLAGS_RELEASE, 0x38);
-		kdlalt = 0;
-	}
-	
-	// right alt
-	if ((kdralt == 0) && ((mf & 0x40) != 0)) {
-		// right alt went down
-		instance->input->KeyboardEvent(instance->input, 1 | KBD_FLAGS_DOWN, 0x38);
-		kdralt = 1;
-	}
-	if ((kdralt != 0) && ((mf & 0x40) == 0)) {
-		// right alt went up
-		instance->input->KeyboardEvent(instance->input, 1 | KBD_FLAGS_RELEASE, 0x38);
-		kdralt = 0;
-	}
-	
-	// left meta
-	if ((kdlmeta == 0) && ((mf & 0x08) != 0)) {
-		// left meta went down
-		instance->input->KeyboardEvent(instance->input, 1 | KBD_FLAGS_DOWN, 0x5b);
-		kdlmeta = 1;
-	}
-	if ((kdlmeta != 0) && ((mf & 0x08) == 0)) {
-		// left meta went up
-		instance->input->KeyboardEvent(instance->input, 1 | KBD_FLAGS_RELEASE, 0x5b);
-		kdlmeta = 0;
-	}
-	
-	// right meta
-	if ((kdrmeta == 0) && ((mf & 0x10) != 0)) {
-		// right meta went down
-		instance->input->KeyboardEvent(instance->input, 1 | KBD_FLAGS_DOWN, 0x5c);
-		kdrmeta = 1;
-	}
-	if ((kdrmeta != 0) && ((mf & 0x10) == 0)) {
-		// right meta went up
-		instance->input->KeyboardEvent(instance->input, 1 | KBD_FLAGS_RELEASE, 0x5c);
-		kdrmeta = 0;
-	}
+
+	keyFlags = 0;
+	key = [event keyCode] + 8;
+	modFlags = [event modifierFlags] & NSDeviceIndependentModifierFlagsMask;
+
+	vkcode = GetVirtualKeyCodeFromKeycode(key, KEYCODE_TYPE_APPLE);
+	scancode = GetVirtualScanCodeFromVirtualKeyCode(vkcode, 4);
+	keyFlags |= (scancode & KBDEXT) ? KBDEXT : 0;
+	scancode &= 0xFF;
+	vkcode &= 0xFF;
+
+#if 0
+	fprintf(stderr, "flagsChanged: key: 0x%04X scancode: 0x%04X vkcode: 0x%04X extended: %d name: %s modFlags: 0x%04X\n",
+	       key - 8, scancode, vkcode, keyFlags, GetVirtualKeyName(vkcode), modFlags);
+
+	if (modFlags & NSAlphaShiftKeyMask)
+		fprintf(stderr, "NSAlphaShiftKeyMask\n");
+
+	if (modFlags & NSShiftKeyMask)
+		fprintf(stderr, "NSShiftKeyMask\n");
+
+	if (modFlags & NSControlKeyMask)
+		fprintf(stderr, "NSControlKeyMask\n");
+
+	if (modFlags & NSAlternateKeyMask)
+		fprintf(stderr, "NSAlternateKeyMask\n");
+
+	if (modFlags & NSCommandKeyMask)
+		fprintf(stderr, "NSCommandKeyMask\n");
+
+	if (modFlags & NSNumericPadKeyMask)
+		fprintf(stderr, "NSNumericPadKeyMask\n");
+
+	if (modFlags & NSHelpKeyMask)
+		fprintf(stderr, "NSHelpKeyMask\n");
+#endif
+
+	if ((modFlags & NSAlphaShiftKeyMask) && !(kbdModFlags & NSAlphaShiftKeyMask))
+		freerdp_input_send_keyboard_event(instance->input, keyFlags | KBD_FLAGS_DOWN, scancode);
+	else if (!(modFlags & NSAlphaShiftKeyMask) && (kbdModFlags & NSAlphaShiftKeyMask))
+		freerdp_input_send_keyboard_event(instance->input, keyFlags | KBD_FLAGS_RELEASE, scancode);
+
+	if ((modFlags & NSShiftKeyMask) && !(kbdModFlags & NSShiftKeyMask))
+		freerdp_input_send_keyboard_event(instance->input, keyFlags | KBD_FLAGS_DOWN, scancode);
+	else if (!(modFlags & NSShiftKeyMask) && (kbdModFlags & NSShiftKeyMask))
+		freerdp_input_send_keyboard_event(instance->input, keyFlags | KBD_FLAGS_RELEASE, scancode);
+
+	if ((modFlags & NSControlKeyMask) && !(kbdModFlags & NSControlKeyMask))
+		freerdp_input_send_keyboard_event(instance->input, keyFlags | KBD_FLAGS_DOWN, scancode);
+	else if (!(modFlags & NSControlKeyMask) && (kbdModFlags & NSControlKeyMask))
+		freerdp_input_send_keyboard_event(instance->input, keyFlags | KBD_FLAGS_RELEASE, scancode);
+
+	if ((modFlags & NSAlternateKeyMask) && !(kbdModFlags & NSAlternateKeyMask))
+		freerdp_input_send_keyboard_event(instance->input, keyFlags | KBD_FLAGS_DOWN, scancode);
+	else if (!(modFlags & NSAlternateKeyMask) && (kbdModFlags & NSAlternateKeyMask))
+		freerdp_input_send_keyboard_event(instance->input, keyFlags | KBD_FLAGS_RELEASE, scancode);
+
+	if ((modFlags & NSCommandKeyMask) && !(kbdModFlags & NSCommandKeyMask))
+		freerdp_input_send_keyboard_event(instance->input, keyFlags | KBD_FLAGS_DOWN, scancode);
+	else if (!(modFlags & NSCommandKeyMask) && (kbdModFlags & NSCommandKeyMask))
+		freerdp_input_send_keyboard_event(instance->input, keyFlags | KBD_FLAGS_RELEASE, scancode);
+
+	if ((modFlags & NSNumericPadKeyMask) && !(kbdModFlags & NSNumericPadKeyMask))
+		freerdp_input_send_keyboard_event(instance->input, keyFlags | KBD_FLAGS_DOWN, scancode);
+	else if (!(modFlags & NSNumericPadKeyMask) && (kbdModFlags & NSNumericPadKeyMask))
+		freerdp_input_send_keyboard_event(instance->input, keyFlags | KBD_FLAGS_RELEASE, scancode);
+
+	if ((modFlags & NSHelpKeyMask) && !(kbdModFlags & NSHelpKeyMask))
+		freerdp_input_send_keyboard_event(instance->input, keyFlags | KBD_FLAGS_DOWN, scancode);
+	else if (!(modFlags & NSHelpKeyMask) && (kbdModFlags & NSHelpKeyMask))
+		freerdp_input_send_keyboard_event(instance->input, keyFlags | KBD_FLAGS_RELEASE, scancode);
+
+	kbdModFlags = modFlags;
 }
 
 - (void) releaseResources
 {
 	int i;
-	
+
 	for (i = 0; i < argc; i++)
 	{
 		if (argv[i])
@@ -608,15 +664,6 @@ struct rgba_data
 	
 	if (pixel_data)
 		free(pixel_data);
-
-	if (run_loop_src_update != 0)
-		CFRunLoopRemoveSource(CFRunLoopGetCurrent(), run_loop_src_update, kCFRunLoopDefaultMode);
-
-	if (run_loop_src_input != 0)
-		CFRunLoopRemoveSource(CFRunLoopGetCurrent(), run_loop_src_input, kCFRunLoopDefaultMode);
-
-	if (run_loop_src_channels != 0)
-		CFRunLoopRemoveSource(CFRunLoopGetCurrent(), run_loop_src_channels, kCFRunLoopDefaultMode);
 }
 
 /** *********************************************************************
@@ -634,14 +681,15 @@ struct rgba_data
 		CGImageRef cgImage = CGBitmapContextCreateImage(self->bitmap_context);
 
 		CGContextClipToRect(cgContext, CGRectMake(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height));
-		CGContextDrawImage(cgContext, CGRectMake(0, 0, [self bounds].size.width, [self bounds].size.height), cgImage);
+		CGContextDrawImage(cgContext, CGRectMake(0,
+							 0, [self bounds].size.width, [self bounds].size.height), cgImage);
 
 		CGImageRelease(cgImage);
 	}
 	else
 	{
 		// just clear the screen with black
-		[[NSColor redColor] set];
+		[[NSColor blackColor] set];
 		NSRectFill([self bounds]);
 	}
 }
@@ -649,94 +697,6 @@ struct rgba_data
 /************************************************************************
  instance methods
  ************************************************************************/
-
-/** *********************************************************************
- * double check that a mouse event occurred in our client view
- ***********************************************************************/
-
-- (BOOL) eventIsInClientArea :(NSEvent *) event :(int *) xptr :(int *) yptr
-{
-	NSPoint loc = [event locationInWindow];
-	int x = (int) loc.x;
-	int y = (int) loc.y;
-	
-	if ((x < 0) || (y < 0))
-	{
-		if (mouseInClientArea)
-		{
-			// set default cursor before leaving client area
-			mouseInClientArea = NO;
-			NSCursor *cur = [NSCursor arrowCursor];
-			[cur set];
-		}
-		
-		return NO;
-	}
-	
-	if ((x > width) || (y > height))
-	{
-		if (mouseInClientArea)
-		{
-			// set default cursor before leaving client area
-			mouseInClientArea = NO;
-			NSCursor *cur = [NSCursor arrowCursor];
-			[cur set];
-		}
-		
-		return NO;
-	}
-	
-	// on Mac origin is at lower left, but we want it on upper left
-	y = height - y;
-	
-	*xptr = x;
-	*yptr = y;
-	mouseInClientArea = YES;
-	return YES;
-}
-
-/** *********************************************************************
- * called when we fail to connect to a RDP server
- ***********************************************************************/
-
-- (void) rdpConnectError
-{
-	NSString* message = @"Error connecting to server";
-	if (connectErrorCode == AUTHENTICATIONERROR)
-	{
-		message = [NSString stringWithFormat:@"%@:\n%@", message, @"Authentication failure, check credentials."];
-	}
-
-	NSAlert *alert = [[NSAlert alloc] init];
-	[alert setMessageText:message];
-	[alert beginSheetModalForWindow:[self window]
-					 modalDelegate:self
-					 didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:)
-	      contextInfo:nil];
-}
-
-/** *********************************************************************
- * called when we fail to launch remote app on RDP server
- ***********************************************************************/
-
-- (void) rdpRemoteAppError
-{
-	NSAlert *alert = [[NSAlert alloc] init];
-	[alert setMessageText:@"Error starting remote app on specified server"];
-	[alert beginSheetModalForWindow:[self window]
-					 modalDelegate:self
-					 didEndSelector:@selector(alertDidEnd:returnCode:contextInfo:)
-	      contextInfo:nil];
-}
-
-/** *********************************************************************
- * just a terminate selector for above call
- ***********************************************************************/
-
-- (void) alertDidEnd:(NSAlert *)a returnCode:(NSInteger)rc contextInfo:(void *)ci
-{
-	[NSApp terminate:nil];
-}
 
 - (void) onPasteboardTimerFired :(NSTimer*) timer
 {
@@ -757,39 +717,12 @@ struct rgba_data
 	}
 }
 
-- (void) setViewSize : (int) w : (int) h
+- (void) setScrollOffset:(int)xOffset y:(int)yOffset w:(int)width h:(int)height
 {
-	// store current dimensions
-	width = w;
-	height = h;
-	
-	// compute difference between window and client area
-	NSRect outerRect = [[self window] frame];
-	NSRect innerRect = [self frame];
-	
-	int widthDiff = outerRect.size.width - innerRect.size.width;
-	int heightDiff = outerRect.size.height - innerRect.size.height;
-	
-	// we are not in RemoteApp mode, disable resizing
-	outerRect.size.width = w + widthDiff;
-	outerRect.size.height = h + heightDiff;
-	[[self window] setMaxSize:outerRect.size];
-	[[self window] setMinSize:outerRect.size];
-
-    @try
-    {
-        [[self window] setFrame:outerRect display:YES];
-    }
-    @catch (NSException * e) {
-       NSLog(@"Exception: %@", e);
-    }
-    @finally {
-    }
-
-	// set client area to specified dimensions
-	innerRect.size.width = w;
-	innerRect.size.height = h;
-	[self setFrame:innerRect];
+	mfc->yCurrentScroll = yOffset;
+	mfc->xCurrentScroll = xOffset;
+	mfc->client_height = height;
+	mfc->client_width = width;
 }
 
 /************************************************************************
@@ -817,9 +750,6 @@ BOOL mac_pre_connect(freerdp* instance)
 	instance->update->EndPaint = mac_end_paint;
 	instance->update->SetBounds = mac_set_bounds;
 	//instance->update->BitmapUpdate = mac_bitmap_update;
-	
-	mfContext *mfc = (mfContext*) instance->context;
-	MRDPView* view = (MRDPView*) mfc->view;
 
 	settings = instance->settings;
 
@@ -870,7 +800,6 @@ BOOL mac_pre_connect(freerdp* instance)
 	settings->OrderSupport[NEG_ELLIPSE_SC_INDEX] = FALSE;
 	settings->OrderSupport[NEG_ELLIPSE_CB_INDEX] = FALSE;
 
-    [view setViewSize :instance->settings->DesktopWidth :instance->settings->DesktopHeight];
 	freerdp_channels_pre_connect(instance->context->channels, instance);
 	
 	return TRUE;
@@ -975,7 +904,7 @@ void mf_Pointer_New(rdpContext* context, rdpPointer* pointer)
 	MRDPCursor* mrdpCursor = [[MRDPCursor alloc] init];
 	mfContext* mfc = (mfContext*) context;
 	MRDPView* view = (MRDPView*) mfc->view;
-
+	
 	rect.size.width = pointer->width;
 	rect.size.height = pointer->height;
 	rect.origin.x = pointer->xPos;
@@ -984,9 +913,17 @@ void mf_Pointer_New(rdpContext* context, rdpPointer* pointer)
 	cursor_data = (BYTE*) malloc(rect.size.width * rect.size.height * 4);
 	mrdpCursor->cursor_data = cursor_data;
 	
+	if (pointer->xorBpp > 24)
+	{
+		freerdp_image_swap_color_order(pointer->xorMaskData, pointer->width, pointer->height);
+	}
+
 	freerdp_alpha_cursor_convert(cursor_data, pointer->xorMaskData, pointer->andMaskData,
 				     pointer->width, pointer->height, pointer->xorBpp, context->gdi->clrconv);
-
+	
+	// TODO if xorBpp is > 24 need to call freerdp_image_swap_color_order
+	//         see file df_graphics.c
+	
 	/* store cursor bitmap image in representation - required by NSImage */
 	bmiRep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:(unsigned char **) &cursor_data
 											pixelsWide:rect.size.width
@@ -1054,18 +991,17 @@ void mf_Pointer_Set(rdpContext* context, rdpPointer* pointer)
 	MRDPView* view = (MRDPView*) mfc->view;
 
 	NSMutableArray* ma = view->cursors;
-	
-	if (!view->mouseInClientArea)
-		return;
-	
+
 	for (MRDPCursor* cursor in ma)
 	{
 		if (cursor->pointer == pointer)
 		{
-			[cursor->nsCursor set];
+			[view setCursor:cursor->nsCursor];
 			return;
 		}
 	}
+
+	NSLog(@"Cursor not found");
 }
 
 /** *********************************************************************
@@ -1083,7 +1019,9 @@ void mf_Pointer_SetNull(rdpContext* context)
 
 void mf_Pointer_SetDefault(rdpContext* context)
 {
-	
+	mfContext* mfc = (mfContext*) context;
+	MRDPView* view = (MRDPView*) mfc->view;
+	[view setCursor:[NSCursor arrowCursor]];
 }
 
 /** *********************************************************************
@@ -1126,6 +1064,13 @@ void mac_end_paint(rdpContext* context)
 	mfContext* mfc = (mfContext*) context;
 	MRDPView* view = (MRDPView*) mfc->view;
 	
+	int ww, wh, dw, dh;
+
+	ww = mfc->client_width;
+	wh = mfc->client_height;
+	dw = mfc->context.settings->DesktopWidth;
+	dh = mfc->context.settings->DesktopHeight;
+
 	if ((context == 0) || (context->gdi == 0))
 		return;
 	
@@ -1139,11 +1084,31 @@ void mac_end_paint(rdpContext* context)
 
 	for (i = 0; i < gdi->primary->hdc->hwnd->ninvalid; i++)
 	{
-		drawRect.origin.x = gdi->primary->hdc->hwnd->cinvalid[i].x - 1;
-		drawRect.origin.y = gdi->primary->hdc->hwnd->cinvalid[i].y - 1;
-		drawRect.size.width = gdi->primary->hdc->hwnd->cinvalid[i].w + 1;
-		drawRect.size.height = gdi->primary->hdc->hwnd->cinvalid[i].h + 1;
+		drawRect.origin.x = gdi->primary->hdc->hwnd->cinvalid[i].x;
+		drawRect.origin.y = gdi->primary->hdc->hwnd->cinvalid[i].y;
+		drawRect.size.width = gdi->primary->hdc->hwnd->cinvalid[i].w;
+		drawRect.size.height = gdi->primary->hdc->hwnd->cinvalid[i].h;
+
+		if (mfc->context.settings->SmartSizing && (ww != dw || wh != dh))
+		{
+			drawRect.origin.y = drawRect.origin.y * wh / dh - 1;
+			drawRect.size.height = drawRect.size.height * wh / dh + 1;
+			drawRect.origin.x = drawRect.origin.x * ww / dw - 1;
+			drawRect.size.width = drawRect.size.width * ww / dw + 1;
+		}
+		else
+		{
+			drawRect.origin.y = drawRect.origin.y - 1;
+			drawRect.size.height = drawRect.size.height + 1;
+			drawRect.origin.x = drawRect.origin.x - 1;
+			drawRect.size.width = drawRect.size.width + 1;
+		}
+
 		windows_to_apple_cords(mfc->view, &drawRect);
+
+		// Note: The xCurrentScroll and yCurrentScroll values do not need to be taken into account
+		//       because the current frame is always at full size, since the scrolling is handled by the external container.
+
 		[view setNeedsDisplayInRect:drawRect];
 	}
 	
@@ -1155,16 +1120,15 @@ void mac_end_paint(rdpContext* context)
  * called when update data is available
  ***********************************************************************/
 
-static void update_activity_cb(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info)
+static void update_activity_cb(freerdp* instance)
 {
 	int status;
 	wMessage message;
 	wMessageQueue* queue;
-	freerdp* instance = (freerdp*) info;
 
 	status = 1;
 	queue = freerdp_get_message_queue(instance, FREERDP_UPDATE_MESSAGE_QUEUE);
-
+	
 	if (queue)
 	{
 		while (MessageQueue_Peek(queue, &message, TRUE))
@@ -1175,21 +1139,21 @@ static void update_activity_cb(CFFileDescriptorRef fdref, CFOptionFlags callBack
 				break;
 		}
 	}
-
-	CFRelease(fdref);
-	register_update_fds(instance);
+	else
+	{
+		fprintf(stderr, "update_activity_cb: No queue!\n");
+	}
 }
 
 /** *********************************************************************
  * called when input data is available
  ***********************************************************************/
 
-static void input_activity_cb(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info)
+static void input_activity_cb(freerdp* instance)
 {
 	int status;
 	wMessage message;
 	wMessageQueue* queue;
-	freerdp* instance = (freerdp*) info;
 
 	status = 1;
 	queue = freerdp_get_message_queue(instance, FREERDP_INPUT_MESSAGE_QUEUE);
@@ -1198,33 +1162,33 @@ static void input_activity_cb(CFFileDescriptorRef fdref, CFOptionFlags callBackT
 	{
 		while (MessageQueue_Peek(queue, &message, TRUE))
 		{
-			fprintf(stderr, "input_activity_cb: message %d\n", message.id);
-
 			status = freerdp_message_queue_process_message(instance, FREERDP_INPUT_MESSAGE_QUEUE, &message);
 
 			if (!status)
 				break;
 		}
 	}
-
-	CFRelease(fdref);
-	register_input_fds(instance);
+	else
+	{
+		fprintf(stderr, "input_activity_cb: No queue!\n");
+	}
 }
 
 /** *********************************************************************
  * called when data is available on a virtual channel
  ***********************************************************************/
 
-static void channel_activity_cb(CFFileDescriptorRef fdref, CFOptionFlags callBackTypes, void *info)
+static void channel_activity_cb(freerdp* instance)
 {
 	wMessage* event;
-	freerdp* instance = (freerdp*) info;
 
 	freerdp_channels_process_pending_messages(instance);
 	event = freerdp_channels_pop_event(instance->context->channels);
 
 	if (event)
 	{
+		fprintf(stderr, "channel_activity_cb: message %d\n", event->id);
+
 		switch (GetMessageClass(event->id))
 		{
 		case CliprdrChannel_Class:
@@ -1234,90 +1198,6 @@ static void channel_activity_cb(CFFileDescriptorRef fdref, CFOptionFlags callBac
 
 		freerdp_event_free(event);
 	}
-
-	CFRelease(fdref);
-	register_channels_fds(instance);
-}
-
-/** *********************************************************************
- * setup callbacks for data availability on update message queue
- ***********************************************************************/
-
-int register_update_fds(freerdp* instance)
-{
-	int fd_update_event;
-	HANDLE update_event;
-	CFFileDescriptorRef fdref;
-	CFFileDescriptorContext fd_context = { 0, instance, NULL, NULL, NULL };
-	mfContext* mfc = (mfContext*) instance->context;
-	MRDPView* view = (MRDPView*) mfc->view;
-
-	if (instance->settings->AsyncUpdate)
-	{
-		update_event = freerdp_get_message_queue_event_handle(instance, FREERDP_UPDATE_MESSAGE_QUEUE);
-		fd_update_event = GetEventFileDescriptor(update_event);
-
-		fdref = CFFileDescriptorCreate(kCFAllocatorDefault, fd_update_event, true, update_activity_cb, &fd_context);
-		CFFileDescriptorEnableCallBacks(fdref, kCFFileDescriptorReadCallBack);
-		view->run_loop_src_update = CFFileDescriptorCreateRunLoopSource(kCFAllocatorDefault, fdref, 0);
-		CFRunLoopAddSource(CFRunLoopGetCurrent(), view->run_loop_src_update, kCFRunLoopDefaultMode);
-	}
-
-	return 0;
-}
-
-/** *********************************************************************
- * setup callbacks for data availability on input message queue
- ***********************************************************************/
-
-int register_input_fds(freerdp* instance)
-{
-	int fd_input_event;
-	HANDLE input_event;
-	CFFileDescriptorRef fdref;
-	CFFileDescriptorContext fd_context = { 0, instance, NULL, NULL, NULL };
-	mfContext* mfc = (mfContext*) instance->context;
-	MRDPView* view = (MRDPView*) mfc->view;
-
-	if (instance->settings->AsyncInput)
-	{
-		input_event = freerdp_get_message_queue_event_handle(instance, FREERDP_INPUT_MESSAGE_QUEUE);
-		fd_input_event = GetEventFileDescriptor(input_event);
-
-		fdref = CFFileDescriptorCreate(kCFAllocatorDefault, fd_input_event, true, input_activity_cb, &fd_context);
-		CFFileDescriptorEnableCallBacks(fdref, kCFFileDescriptorReadCallBack);
-		view->run_loop_src_input = CFFileDescriptorCreateRunLoopSource(kCFAllocatorDefault, fdref, 0);
-		CFRunLoopAddSource(CFRunLoopGetCurrent(), view->run_loop_src_input, kCFRunLoopDefaultMode);
-	}
-
-	return 0;
-}
-
-/** *********************************************************************
- * setup callbacks for data availability on channels
- ***********************************************************************/
-
-int register_channels_fds(freerdp* instance)
-{
-	int fd_channel_event;
-	HANDLE channel_event;
-	CFFileDescriptorRef fdref;
-	CFFileDescriptorContext fd_context = { 0, instance, NULL, NULL, NULL };
-	mfContext* mfc = (mfContext*) instance->context;
-	MRDPView* view = (MRDPView*) mfc->view;
-
-	if (instance->settings->AsyncChannels)
-	{
-		channel_event = freerdp_channels_get_event_handle(instance);
-		fd_channel_event = GetEventFileDescriptor(channel_event);
-
-		fdref = CFFileDescriptorCreate(kCFAllocatorDefault, fd_channel_event, true, channel_activity_cb, &fd_context);
-		CFFileDescriptorEnableCallBacks(fdref, kCFFileDescriptorReadCallBack);
-		view->run_loop_src_channels = CFFileDescriptorCreateRunLoopSource(kCFAllocatorDefault, fdref, 0);
-		CFRunLoopAddSource(CFRunLoopGetCurrent(), view->run_loop_src_channels, kCFRunLoopDefaultMode);
-	}
-
-	return 0;
 }
 
 /** *********************************************************************
@@ -1555,25 +1435,18 @@ void cliprdr_send_supported_format_list(freerdp* instance)
 	freerdp_channels_send_event(instance->context->channels, (wMessage*) event);
 }
 
-
-/**
- * given a rect with 0,0 at the bottom left (apple cords)
- * convert it to a rect with 0,0 at the top left (windows cords)
- */
-
-void apple_to_windows_cords(MRDPView* view, NSRect* r)
-{
-	r->origin.y = view->height - (r->origin.y + r->size.height);
-}
-
 /**
  * given a rect with 0,0 at the top left (windows cords)
  * convert it to a rect with 0,0 at the bottom left (apple cords)
+ *
+ * Note: the formula works for conversions in both directions.
+ *
  */
 
 void windows_to_apple_cords(MRDPView* view, NSRect* r)
 {
-	r->origin.y = view->height - (r->origin.y + r->size.height);
+	r->origin.y = [view frame].size.height - (r->origin.y + r->size.height);
 }
+
 
 @end

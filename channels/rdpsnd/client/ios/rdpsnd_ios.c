@@ -201,11 +201,6 @@ static OSStatus rdpsnd_ios_render_cb(
 	//pthread_mutex_lock(&p->bMutex);
 	for (i = 0; i < ioData->mNumberBuffers; i++)
 	{
-		//printf("buf%d ", i);
-		/*printf("buf size = %d (%lums) ",
-		       (unsigned int)ioData->mBuffers[i].mDataByteSize,
-		       (ioData->mBuffers[i].mDataByteSize * 1000) / p->bpsAvg);
-		 */
 		AudioBuffer* target_buffer = &ioData->mBuffers[i];
 		
 		int32_t available_bytes = 0;
@@ -223,6 +218,8 @@ static OSStatus rdpsnd_ios_render_cb(
 		}
 		else
 		{
+			*ioActionFlags = *ioActionFlags | kAudioUnitRenderAction_OutputIsSilence;
+			
 			//FIXME: force sending of any remaining items in queue
 			if (Queue_Count(p->waveQ) > 0)
 			{
@@ -264,9 +261,6 @@ static BOOL rdpsnd_ios_format_supported(rdpsndDevicePlugin* __unused device, AUD
 	{
 		return 1;
 	}
-	
-	
-	
 	
 	return 0;
 }
@@ -329,23 +323,6 @@ static void rdpsnd_ios_stop(rdpsndDevicePlugin* __unused device)
 		//pthread_mutex_unlock(&p->bMutex);
 	}
 }
-
-/*static void rdpsnd_ios_play(rdpsndDevicePlugin* device, BYTE* data, int size)
- {
- rdpsndIOSPlugin *p = THIS(device);
- 
- const BOOL ok = TPCircularBufferProduceBytes(&p->buffer, data, size);
- if (!ok)
- {
- return;
- }
- 
- printf("play: %d (%d frames)\n", size, size/bytesPerFrame);
- 
- 
- rdpsnd_ios_start(device);
- }*/
-
 
 static void rdpsnd_ios_wave_play(rdpsndDevicePlugin* device, RDPSND_WAVE* wave)
 {

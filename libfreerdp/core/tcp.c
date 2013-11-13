@@ -57,13 +57,14 @@
 
 #include "tcp.h"
 
-void tcp_get_ip_address(rdpTcp * tcp)
+void tcp_get_ip_address(rdpTcp* tcp)
 {
 	BYTE* ip;
 	socklen_t length;
 	struct sockaddr_in sockaddr;
 
 	length = sizeof(sockaddr);
+	ZeroMemory(&sockaddr, length);
 
 	if (getsockname(tcp->sockfd, (struct sockaddr*) &sockaddr, &length) == 0)
 	{
@@ -73,16 +74,16 @@ void tcp_get_ip_address(rdpTcp * tcp)
 	}
 	else
 	{
-		strncpy(tcp->ip_address, "127.0.0.1", sizeof(tcp->ip_address));
+		strcpy(tcp->ip_address, "127.0.0.1");
 	}
 
-	tcp->ip_address[sizeof(tcp->ip_address) - 1] = 0;
-
 	tcp->settings->IPv6Enabled = 0;
+
+	free(tcp->settings->ClientAddress);
 	tcp->settings->ClientAddress = _strdup(tcp->ip_address);
 }
 
-void tcp_get_mac_address(rdpTcp * tcp)
+void tcp_get_mac_address(rdpTcp* tcp)
 {
 #ifdef LINUX
 	BYTE* mac;
@@ -115,12 +116,12 @@ void tcp_get_mac_address(rdpTcp * tcp)
 		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]); */
 }
 
-BOOL tcp_connect(rdpTcp* tcp, const char* hostname, UINT16 port)
+BOOL tcp_connect(rdpTcp* tcp, const char* hostname, int port)
 {
 	UINT32 option_value;
 	socklen_t option_len;
-	
-	if (hostname == NULL)
+
+	if (!hostname)
 		return FALSE;
 
 	if (hostname[0] == '/')
@@ -253,8 +254,18 @@ BOOL tcp_set_keep_alive_mode(rdpTcp* tcp)
 	return TRUE;
 }
 
+int tcp_attach(rdpTcp* tcp, int sockfd)
+{
+	tcp->sockfd = sockfd;
+	SetEventFileDescriptor(tcp->event, tcp->sockfd);
+	return 0;
+}
+
 HANDLE tcp_get_event_handle(rdpTcp* tcp)
 {
+	if (!tcp)
+		return NULL;
+	
 #ifndef _WIN32
 	return tcp->event;
 #else
@@ -268,7 +279,7 @@ rdpTcp* tcp_new(rdpSettings* settings)
 
 	tcp = (rdpTcp*) malloc(sizeof(rdpTcp));
 
-	if (tcp != NULL)
+	if (tcp)
 	{
 		ZeroMemory(tcp, sizeof(rdpTcp));
 

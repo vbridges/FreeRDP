@@ -35,12 +35,16 @@ extern "C" {
 #endif
 
 typedef void* (*OBJECT_NEW_FN)(void);
+typedef void (*OBJECT_INIT_FN)(void* obj);
+typedef void (*OBJECT_UNINIT_FN)(void* obj);
 typedef void (*OBJECT_FREE_FN)(void* obj);
 typedef void (*OBJECT_EQUALS_FN)(void* objA, void* objB);
 
 struct _wObject
 {
 	OBJECT_NEW_FN fnObjectNew;
+	OBJECT_INIT_FN fnObjectInit;
+	OBJECT_UNINIT_FN fnObjectUninit;
 	OBJECT_FREE_FN fnObjectFree;
 	OBJECT_EQUALS_FN fnObjectEquals;
 };
@@ -58,7 +62,7 @@ struct _wQueue
 	int tail;
 	int size;
 	void** array;
-	HANDLE mutex;
+	CRITICAL_SECTION lock;
 	HANDLE event;
 
 	wObject object;
@@ -67,8 +71,8 @@ typedef struct _wQueue wQueue;
 
 WINPR_API int Queue_Count(wQueue* queue);
 
-WINPR_API BOOL Queue_Lock(wQueue* queue);
-WINPR_API BOOL Queue_Unlock(wQueue* queue);
+WINPR_API void Queue_Lock(wQueue* queue);
+WINPR_API void Queue_Unlock(wQueue* queue);
 
 WINPR_API HANDLE Queue_Event(wQueue* queue);
 
@@ -93,7 +97,7 @@ struct _wStack
 	int size;
 	int capacity;
 	void** array;
-	HANDLE mutex;
+	CRITICAL_SECTION lock;
 	BOOL synchronized;
 	wObject object;
 };
@@ -125,7 +129,7 @@ struct _wArrayList
 
 	int size;
 	void** array;
-	HANDLE mutex;
+	CRITICAL_SECTION lock;
 
 	wObject object;
 };
@@ -137,8 +141,8 @@ WINPR_API BOOL ArrayList_IsFixedSized(wArrayList* arrayList);
 WINPR_API BOOL ArrayList_IsReadOnly(wArrayList* arrayList);
 WINPR_API BOOL ArrayList_IsSynchronized(wArrayList* arrayList);
 
-WINPR_API BOOL ArrayList_Lock(wArrayList* arrayList);
-WINPR_API BOOL ArrayList_Unlock(wArrayList* arrayList);
+WINPR_API void ArrayList_Lock(wArrayList* arrayList);
+WINPR_API void ArrayList_Unlock(wArrayList* arrayList);
 
 WINPR_API void* ArrayList_GetItem(wArrayList* arrayList, int index);
 WINPR_API void ArrayList_SetItem(wArrayList* arrayList, int index, void* obj);
@@ -165,7 +169,7 @@ WINPR_API void ArrayList_Free(wArrayList* arrayList);
 struct _wDictionary
 {
 	BOOL synchronized;
-	HANDLE mutex;
+	CRITICAL_SECTION lock;
 };
 typedef struct _wDictionary wDictionary;
 
@@ -184,25 +188,72 @@ struct _wListDictionaryItem
 struct _wListDictionary
 {
 	BOOL synchronized;
-	HANDLE mutex;
+	CRITICAL_SECTION lock;
 
 	wListDictionaryItem* head;
+	wObject object;
 };
 typedef struct _wListDictionary wListDictionary;
+
+#define ListDictionary_Object(_dictionary)	(&_dictionary->object)
 
 WINPR_API int ListDictionary_Count(wListDictionary* listDictionary);
 
 WINPR_API void ListDictionary_Add(wListDictionary* listDictionary, void* key, void* value);
-WINPR_API void ListDictionary_Remove(wListDictionary* listDictionary, void* key);
+WINPR_API void* ListDictionary_Remove(wListDictionary* listDictionary, void* key);
+WINPR_API void* ListDictionary_Remove_Head(wListDictionary* listDictionary);
 WINPR_API void ListDictionary_Clear(wListDictionary* listDictionary);
 
 WINPR_API BOOL ListDictionary_Contains(wListDictionary* listDictionary, void* key);
+WINPR_API int ListDictionary_GetKeys(wListDictionary* listDictionary, ULONG_PTR** ppKeys);
 
 WINPR_API void* ListDictionary_GetItemValue(wListDictionary* listDictionary, void* key);
 WINPR_API BOOL ListDictionary_SetItemValue(wListDictionary* listDictionary, void* key, void* value);
 
 WINPR_API wListDictionary* ListDictionary_New(BOOL synchronized);
 WINPR_API void ListDictionary_Free(wListDictionary* listDictionary);
+
+/* System.Collections.Generic.LinkedList<T> */
+
+typedef struct _wLinkedListItem wLinkedListNode;
+
+struct _wLinkedListItem
+{
+	void* value;
+	wLinkedListNode* prev;
+	wLinkedListNode* next;
+};
+
+struct _wLinkedList
+{
+	int count;
+	int initial;
+	wLinkedListNode* head;
+	wLinkedListNode* tail;
+	wLinkedListNode* current;
+};
+typedef struct _wLinkedList wLinkedList;
+
+WINPR_API int LinkedList_Count(wLinkedList* list);
+WINPR_API void* LinkedList_First(wLinkedList* list);
+WINPR_API void* LinkedList_Last(wLinkedList* list);
+
+WINPR_API BOOL LinkedList_Contains(wLinkedList* list, void* value);
+WINPR_API void LinkedList_Clear(wLinkedList* list);
+
+WINPR_API void LinkedList_AddFirst(wLinkedList* list, void* value);
+WINPR_API void LinkedList_AddLast(wLinkedList* list, void* value);
+
+WINPR_API void LinkedList_Remove(wLinkedList* list, void* value);
+WINPR_API void LinkedList_RemoveFirst(wLinkedList* list);
+WINPR_API void LinkedList_RemoveLast(wLinkedList* list);
+
+WINPR_API void LinkedList_Enumerator_Reset(wLinkedList* list);
+WINPR_API void* LinkedList_Enumerator_Current(wLinkedList* list);
+WINPR_API BOOL LinkedList_Enumerator_MoveNext(wLinkedList* list);
+
+WINPR_API wLinkedList* LinkedList_New(void);
+WINPR_API void LinkedList_Free(wLinkedList* list);
 
 /* System.Collections.Generic.KeyValuePair<TKey,TValue> */
 
@@ -227,7 +278,7 @@ typedef int (*REFERENCE_FREE)(void* context, void* ptr);
 struct _wReferenceTable
 {
 	UINT32 size;
-	HANDLE mutex;
+	CRITICAL_SECTION lock;
 	void* context;
 	BOOL synchronized;
 	wReference* array;
@@ -246,7 +297,7 @@ WINPR_API void ReferenceTable_Free(wReferenceTable* referenceTable);
 struct _wCountdownEvent
 {
 	DWORD count;
-	HANDLE mutex;
+	CRITICAL_SECTION lock;
 	HANDLE event;
 	DWORD initialCount;
 };
@@ -266,17 +317,36 @@ WINPR_API void CountdownEvent_Free(wCountdownEvent* countdown);
 
 /* BufferPool */
 
-struct _wBufferPool
+struct _wBufferPoolItem
 {
 	int size;
-	int capacity;
-	void** array;
-	HANDLE mutex;
+	void* buffer;
+};
+typedef struct _wBufferPoolItem wBufferPoolItem;
+
+struct _wBufferPool
+{
 	int fixedSize;
 	DWORD alignment;
 	BOOL synchronized;
+	CRITICAL_SECTION lock;
+
+	int size;
+	int capacity;
+	void** array;
+
+	int aSize;
+	int aCapacity;
+	wBufferPoolItem* aArray;
+
+	int uSize;
+	int uCapacity;
+	wBufferPoolItem* uArray;
 };
 typedef struct _wBufferPool wBufferPool;
+
+WINPR_API int BufferPool_GetPoolSize(wBufferPool* pool);
+WINPR_API int BufferPool_GetBufferSize(wBufferPool* pool, void* buffer);
 
 WINPR_API void* BufferPool_Take(wBufferPool* pool, int bufferSize);
 WINPR_API void BufferPool_Return(wBufferPool* pool, void* buffer);
@@ -292,7 +362,7 @@ struct _wObjectPool
 	int size;
 	int capacity;
 	void** array;
-	HANDLE mutex;
+	CRITICAL_SECTION lock;
 	wObject object;
 	BOOL synchronized;
 };
@@ -330,8 +400,10 @@ struct _wMessageQueue
 	int size;
 	int capacity;
 	wMessage* array;
-	HANDLE mutex;
+	CRITICAL_SECTION lock;
 	HANDLE event;
+
+	wObject object;
 };
 typedef struct _wMessageQueue wMessageQueue;
 
@@ -348,7 +420,43 @@ WINPR_API void MessageQueue_PostQuit(wMessageQueue* queue, int nExitCode);
 WINPR_API int MessageQueue_Get(wMessageQueue* queue, wMessage* message);
 WINPR_API int MessageQueue_Peek(wMessageQueue* queue, wMessage* message, BOOL remove);
 
-WINPR_API wMessageQueue* MessageQueue_New(void);
+/*! \brief Clears all elements in a message queue.
+ *
+ *  \note If dynamically allocated data is part of the messages,
+ *        a custom cleanup handler must be passed in the 'callback'
+ *        argument for MessageQueue_New.
+ *
+ *  \param queue The queue to clear.
+ *
+ *  \return 0 in case of success or a error code otherwise.
+ */
+WINPR_API int MessageQueue_Clear(wMessageQueue *queue);
+
+/*! \brief Creates a new message queue.
+ * 				 If 'callback' is null, no custom cleanup will be done
+ * 				 on message queue deallocation.
+ * 				 If the 'callback' argument contains valid uninit or
+ * 				 free functions those will be called by
+ * 				 'MessageQueue_Clear'.
+ *
+ * \param callback a pointer to custom initialization / cleanup functions.
+ * 								 Can be NULL if not used.
+ *
+ * \return A pointer to a newly allocated MessageQueue or NULL.
+ */
+WINPR_API wMessageQueue* MessageQueue_New(const wObject *callback);
+
+/*! \brief Frees resources allocated by a message queue.
+ * 				 This function will only free resources allocated
+ *				 internally.
+ *
+ * \note Empty the queue before calling this function with
+ * 			 'MessageQueue_Clear', 'MessageQueue_Get' or
+ * 			 'MessageQueue_Peek' to free all resources allocated
+ * 			 by the message contained.
+ *
+ * \param queue A pointer to the queue to be freed.
+ */
 WINPR_API void MessageQueue_Free(wMessageQueue* queue);
 
 /* Message Pipe */
@@ -414,9 +522,9 @@ typedef struct _wEventType wEventType;
 #define DEFINE_EVENT_END(_name) \
 	} _name ## EventArgs; \
 	DEFINE_EVENT_HANDLER(_name); \
-	DEFINE_EVENT_RAISE(_name); \
-	DEFINE_EVENT_SUBSCRIBE(_name); \
-	DEFINE_EVENT_UNSUBSCRIBE(_name);
+	DEFINE_EVENT_RAISE(_name) \
+	DEFINE_EVENT_SUBSCRIBE(_name) \
+	DEFINE_EVENT_UNSUBSCRIBE(_name)
 
 #define DEFINE_EVENT_ENTRY(_name) \
 	{ #_name, { sizeof( _name ## EventArgs) }, 0, { \
@@ -427,7 +535,7 @@ typedef struct _wEventType wEventType;
 
 struct _wPubSub
 {
-	HANDLE mutex;
+	CRITICAL_SECTION lock;
 	BOOL synchronized;
 
 	int size;
@@ -436,8 +544,8 @@ struct _wPubSub
 };
 typedef struct _wPubSub wPubSub;
 
-WINPR_API BOOL PubSub_Lock(wPubSub* pubSub);
-WINPR_API BOOL PubSub_Unlock(wPubSub* pubSub);
+WINPR_API void PubSub_Lock(wPubSub* pubSub);
+WINPR_API void PubSub_Unlock(wPubSub* pubSub);
 
 WINPR_API wEventType* PubSub_GetEventTypes(wPubSub* pubSub, int* count);
 WINPR_API void PubSub_AddEventTypes(wPubSub* pubSub, wEventType* events, int count);

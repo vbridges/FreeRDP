@@ -29,6 +29,8 @@
 #include <winpr/error.h>
 #include <winpr/handle.h>
 
+#include <winpr/nt.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -139,14 +141,22 @@ typedef RTL_CONDITION_VARIABLE CONDITION_VARIABLE, *PCONDITION_VARIABLE;
 
 /* Critical Section */
 
+#if defined(__linux__)
+/**
+ * Linux NPTL thread synchronization primitives are implemented using
+ * the futex system calls ... we can't beat futex with a spin loop.
+ */
+#define WINPR_CRITICAL_SECTION_DISABLE_SPINCOUNT
+#endif
+
 typedef struct _RTL_CRITICAL_SECTION
 {
-	void* DebugInfo;
+	PVOID DebugInfo;
 	LONG LockCount;
 	LONG RecursionCount;
-	PVOID OwningThread;
-	PVOID LockSemaphore;
-	ULONG SpinCount;
+	HANDLE OwningThread;
+	HANDLE LockSemaphore;
+	ULONG_PTR SpinCount;
 } RTL_CRITICAL_SECTION, *PRTL_CRITICAL_SECTION;
 
 typedef RTL_CRITICAL_SECTION CRITICAL_SECTION;
@@ -209,6 +219,8 @@ WINPR_API DWORD SignalObjectAndWait(HANDLE hObjectToSignal, HANDLE hObjectToWait
 
 /* Waitable Timer */
 
+#define CREATE_WAITABLE_TIMER_MANUAL_RESET		0x00000001
+
 typedef struct _REASON_CONTEXT
 {
 	ULONG Version;
@@ -230,6 +242,9 @@ typedef struct _REASON_CONTEXT
 
 typedef VOID (*PTIMERAPCROUTINE)(LPVOID lpArgToCompletionRoutine, DWORD dwTimerLowValue, DWORD dwTimerHighValue);
 
+WINPR_API HANDLE CreateWaitableTimerA(LPSECURITY_ATTRIBUTES lpTimerAttributes, BOOL bManualReset, LPCSTR lpTimerName);
+WINPR_API HANDLE CreateWaitableTimerW(LPSECURITY_ATTRIBUTES lpTimerAttributes, BOOL bManualReset, LPCWSTR lpTimerName);
+
 WINPR_API HANDLE CreateWaitableTimerExA(LPSECURITY_ATTRIBUTES lpTimerAttributes, LPCSTR lpTimerName, DWORD dwFlags, DWORD dwDesiredAccess);
 WINPR_API HANDLE CreateWaitableTimerExW(LPSECURITY_ATTRIBUTES lpTimerAttributes, LPCWSTR lpTimerName, DWORD dwFlags, DWORD dwDesiredAccess);
 
@@ -245,12 +260,20 @@ WINPR_API HANDLE OpenWaitableTimerW(DWORD dwDesiredAccess, BOOL bInheritHandle, 
 WINPR_API BOOL CancelWaitableTimer(HANDLE hTimer);
 
 #ifdef UNICODE
+#define CreateWaitableTimer		CreateWaitableTimerW
 #define CreateWaitableTimerEx		CreateWaitableTimerExW
 #define OpenWaitableTimer		OpenWaitableTimerW
 #else
+#define CreateWaitableTimer		CreateWaitableTimerA
 #define CreateWaitableTimerEx		CreateWaitableTimerExA
 #define OpenWaitableTimer		OpenWaitableTimerA
 #endif
+
+#endif
+
+#if ((_WIN32) && (_WIN32_WINNT < 0x0600))
+
+WINPR_API BOOL InitializeCriticalSectionEx(LPCRITICAL_SECTION lpCriticalSection, DWORD dwSpinCount, DWORD Flags);
 
 #endif
 

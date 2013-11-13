@@ -44,7 +44,12 @@ void StreamPool_ShiftUsed(wStreamPool* pool, int index, int count)
 	}
 	else if (count < 0)
 	{
-		MoveMemory(&pool->uArray[index], &pool->uArray[index - count], (pool->uSize - index) * sizeof(wStream*));
+		if (pool->uSize - index + count > 0)
+		{
+			MoveMemory(&pool->uArray[index], &pool->uArray[index - count],
+					(pool->uSize - index + count) * sizeof(wStream*));
+		}
+
 		pool->uSize += count;
 	}
 }
@@ -101,7 +106,12 @@ void StreamPool_ShiftAvailable(wStreamPool* pool, int index, int count)
 	}
 	else if (count < 0)
 	{
-		MoveMemory(&pool->aArray[index], &pool->aArray[index - count], (pool->aSize - index) * sizeof(wStream*));
+		if (pool->aSize - index + count > 0)
+		{
+			MoveMemory(&pool->aArray[index], &pool->aArray[index - count],
+					(pool->aSize - index + count) * sizeof(wStream*));
+		}
+
 		pool->aSize += count;
 	}
 }
@@ -115,13 +125,14 @@ wStream* StreamPool_Take(wStreamPool* pool, size_t size)
 	int index;
 	int foundIndex;
 	wStream* s = NULL;
-	BOOL found = FALSE;
 
 	if (pool->synchronized)
-		WaitForSingleObject(pool->mutex, INFINITE);
+		EnterCriticalSection(&pool->lock);
 
 	if (size == 0)
 		size = pool->defaultSize;
+
+	foundIndex = -1;
 
 	for (index = 0; index < pool->aSize; index++)
 	{
@@ -130,12 +141,11 @@ wStream* StreamPool_Take(wStreamPool* pool, size_t size)
 		if (Stream_Capacity(s) >= size)
 		{
 			foundIndex = index;
-			found = TRUE;
 			break;
 		}
 	}
 
-	if (!found)
+	if (foundIndex < 0)
 	{
 		s = Stream_New(NULL, size);
 	}
@@ -143,8 +153,8 @@ wStream* StreamPool_Take(wStreamPool* pool, size_t size)
 	{
 		StreamPool_ShiftAvailable(pool, foundIndex, -1);
 
+		Stream_SetPosition(s, 0);
 		Stream_EnsureCapacity(s, size);
-		Stream_Pointer(s) = Stream_Buffer(s);
 	}
 
 	s->pool = pool;
@@ -153,7 +163,7 @@ wStream* StreamPool_Take(wStreamPool* pool, size_t size)
 	StreamPool_AddUsed(pool, s);
 
 	if (pool->synchronized)
-		ReleaseMutex(pool->mutex);
+		LeaveCriticalSection(&pool->lock);
 
 	return s;
 }
@@ -165,7 +175,7 @@ wStream* StreamPool_Take(wStreamPool* pool, size_t size)
 void StreamPool_Return(wStreamPool* pool, wStream* s)
 {
 	if (pool->synchronized)
-		WaitForSingleObject(pool->mutex, INFINITE);
+		EnterCriticalSection(&pool->lock);
 
 	if ((pool->aSize + 1) >= pool->aCapacity)
 	{
@@ -177,7 +187,7 @@ void StreamPool_Return(wStreamPool* pool, wStream* s)
 	StreamPool_RemoveUsed(pool, s);
 
 	if (pool->synchronized)
-		ReleaseMutex(pool->mutex);
+		LeaveCriticalSection(&pool->lock);
 }
 
 /**
@@ -186,7 +196,7 @@ void StreamPool_Return(wStreamPool* pool, wStream* s)
 
 void StreamPool_Lock(wStreamPool* pool)
 {
-	WaitForSingleObject(pool->mutex, INFINITE);
+	EnterCriticalSection(&pool->lock);
 }
 
 /**
@@ -195,7 +205,7 @@ void StreamPool_Lock(wStreamPool* pool)
 
 void StreamPool_Unlock(wStreamPool* pool)
 {
-	ReleaseMutex(pool->mutex);
+	LeaveCriticalSection(&pool->lock);
 }
 
 /**
@@ -241,7 +251,7 @@ wStream* StreamPool_Find(wStreamPool* pool, BYTE* ptr)
 	wStream* s = NULL;
 	BOOL found = FALSE;
 
-	WaitForSingleObject(pool->mutex, INFINITE);
+	EnterCriticalSection(&pool->lock);
 
 	for (index = 0; index < pool->uSize; index++)
 	{
@@ -254,7 +264,7 @@ wStream* StreamPool_Find(wStreamPool* pool, BYTE* ptr)
 		}
 	}
 
-	ReleaseMutex(pool->mutex);
+	LeaveCriticalSection(&pool->lock);
 
 	return (found) ? s : NULL;
 }
@@ -294,7 +304,7 @@ void StreamPool_Release(wStreamPool* pool, BYTE* ptr)
 void StreamPool_Clear(wStreamPool* pool)
 {
 	if (pool->synchronized)
-		WaitForSingleObject(pool->mutex, INFINITE);
+		EnterCriticalSection(&pool->lock);
 
 	while (pool->aSize > 0)
 	{
@@ -303,7 +313,7 @@ void StreamPool_Clear(wStreamPool* pool)
 	}
 
 	if (pool->synchronized)
-		ReleaseMutex(pool->mutex);
+		LeaveCriticalSection(&pool->lock);
 }
 
 /**
@@ -323,16 +333,17 @@ wStreamPool* StreamPool_New(BOOL synchronized, size_t defaultSize)
 		pool->synchronized = synchronized;
 		pool->defaultSize = defaultSize;
 
-		if (pool->synchronized)
-			pool->mutex = CreateMutex(NULL, FALSE, NULL);
+		InitializeCriticalSectionAndSpinCount(&pool->lock, 4000);
 
 		pool->aSize = 0;
 		pool->aCapacity = 32;
 		pool->aArray = (wStream**) malloc(sizeof(wStream*) * pool->aCapacity);
+		ZeroMemory(pool->aArray, sizeof(wStream*) * pool->aCapacity);
 
 		pool->uSize = 0;
 		pool->uCapacity = 32;
 		pool->uArray = (wStream**) malloc(sizeof(wStream*) * pool->uCapacity);
+		ZeroMemory(pool->uArray, sizeof(wStream*) * pool->uCapacity);
 	}
 
 	return pool;
@@ -344,8 +355,7 @@ void StreamPool_Free(wStreamPool* pool)
 	{
 		StreamPool_Clear(pool);
 
-		if (pool->synchronized)
-			CloseHandle(pool->mutex);
+		DeleteCriticalSection(&pool->lock);
 
 		free(pool->aArray);
 		free(pool->uArray);

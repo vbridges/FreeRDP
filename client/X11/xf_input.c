@@ -21,6 +21,13 @@
 #include "config.h"
 #endif
 
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+
+#ifdef WITH_XCURSOR
+#include <X11/Xcursor/Xcursor.h>
+#endif
+
 #ifdef WITH_XI
 #include <X11/extensions/XInput2.h>
 #endif
@@ -35,6 +42,8 @@
 #define MAX_CONTACTS 2
 
 #define PAN_THRESHOLD 50
+//#define PAN_BY_PIX 10
+
 #define ZOOM_THRESHOLD 10
 
 #define MIN_FINGER_DIST 5
@@ -64,6 +73,8 @@ double py_vector;
 
 int xinput_opcode;
 int scale_cnt;
+
+int pan_by_pix;
 
 const char* xf_input_get_class_string(int class)
 {
@@ -122,6 +133,8 @@ int xf_input_init(xfContext* xfc, Window window)
 	
 	if (xfc->settings->MultiTouchInput)
 		xfc->use_xinput = TRUE;
+
+	pan_by_pix = xfc->settings->PanByPix;
 	
 	info = XIQueryDevice(xfc->display, XIAllDevices, &ndevices);
 	
@@ -190,7 +203,8 @@ int xf_input_init(xfContext* xfc, Window window)
 			}
 		}
 	}
-	
+	XIFreeDeviceInfo(info);
+
 	if (nmasks > 0)
 		xstatus = XISelectEvents(xfc->display, window, evmasks, nmasks);
 	
@@ -274,7 +288,7 @@ void xf_input_detect_pan(xfContext* xfc)
 				PanningChangeEventArgs e;
 				
 				EventArgsInit(&e, "xfreerdp");
-				e.XPan = 5;
+				e.XPan = pan_by_pix;
 				e.YPan = 0;
 				PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
@@ -291,7 +305,7 @@ void xf_input_detect_pan(xfContext* xfc)
 				PanningChangeEventArgs e;
 				
 				EventArgsInit(&e, "xfreerdp");
-				e.XPan = -5;
+				e.XPan = -pan_by_pix;
 				e.YPan = 0;
 				PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
@@ -315,7 +329,7 @@ void xf_input_detect_pan(xfContext* xfc)
 				
 				EventArgsInit(&e, "xfreerdp");
 				e.XPan = 0;
-				e.YPan = 5;
+				e.YPan = pan_by_pix;
 				PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
 			
@@ -332,7 +346,7 @@ void xf_input_detect_pan(xfContext* xfc)
 				
 				EventArgsInit(&e, "xfreerdp");
 				e.XPan = 0;
-				e.YPan = -5;
+				e.YPan = -pan_by_pix;
 				PubSub_OnPanningChange(((rdpContext*) xfc)->pubSub, xfc, &e);
 			}
 			
@@ -402,12 +416,14 @@ void xf_input_detect_pinch(xfContext* xfc)
 				xfc->settings->ScalingFactor = 0.8;
 			
 			EventArgsInit(&e, "xfreerdp");
-			e.width = (int) xfc->originalWidth * xfc->settings->ScalingFactor;
-			e.height = (int) xfc->originalHeight * xfc->settings->ScalingFactor;
+
+			xf_scale_update(xfc);
+			e.width = xfc->currentWidth;
+			e.height = xfc->currentHeight;
 			
 			xf_transform_window(xfc);
 			PubSub_OnResizeWindow(((rdpContext*) xfc)->pubSub, xfc, &e);
-			xf_draw_screen_scaled(xfc, 0, 0, 0, 0, FALSE);
+			xf_draw_transformed_region(xfc, 0, 0, 0, 0, FALSE);
 			
 			z_vector = 0;
 			
@@ -424,12 +440,14 @@ void xf_input_detect_pinch(xfContext* xfc)
 				xfc->settings->ScalingFactor = 1.2;
 			
 			EventArgsInit(&e, "xfreerdp");
-			e.width = (int) xfc->originalWidth * xfc->settings->ScalingFactor;
-			e.height = (int) xfc->originalHeight * xfc->settings->ScalingFactor;
-			
+
+			xf_scale_update(xfc);
+			e.width = xfc->currentWidth;
+			e.height = xfc->currentHeight;
+
 			xf_transform_window(xfc);
 			PubSub_OnResizeWindow(((rdpContext*) xfc)->pubSub, xfc, &e);
-			xf_draw_screen_scaled(xfc, 0, 0, 0, 0, FALSE);
+			xf_draw_transformed_region(xfc, 0, 0, 0, 0, FALSE);
 			
 			z_vector = 0;
 			
@@ -458,6 +476,11 @@ void xf_input_touch_begin(xfContext* xfc, XIDeviceEvent* event)
 			active_contacts++;
 			break;
 		}
+	}
+
+	if(active_contacts > 1)
+	{
+		xfc->supress_mouse = TRUE;
 	}
 }
 
@@ -495,8 +518,13 @@ void xf_input_touch_end(xfContext* xfc, XIDeviceEvent* event)
 			//contacts[i].pos_y = (int)event->event_y;
 			
 			active_contacts--;
-			break;printf("TouchBegin\n");
+			break;
 		}
+	}
+
+	if(active_contacts < 2)
+	{
+		xfc->supress_mouse = FALSE;
 	}
 }
 
@@ -551,6 +579,57 @@ char* xf_input_touch_state_string(DWORD flags)
 		return "TouchUnknown";
 }
 
+void xf_input_hide_cursor(xfContext* xfc)
+{
+#ifdef WITH_XCURSOR
+	if (!xfc->cursorHidden)
+	{
+		XcursorImage ci;
+		XcursorPixel xp = 0;
+		static Cursor nullcursor = None;
+
+		xf_lock_x11(xfc, FALSE);
+
+		ZeroMemory(&ci, sizeof(ci));
+		ci.version = XCURSOR_IMAGE_VERSION;
+		ci.size = sizeof(ci);
+		ci.width = ci.height = 1;
+		ci.xhot = ci.yhot = 0;
+		ci.pixels = &xp;
+		nullcursor = XcursorImageLoadCursor(xfc->display, &ci);
+
+		if ((xfc->window) && (nullcursor != None))
+			XDefineCursor(xfc->display, xfc->window->handle, nullcursor);
+
+		xfc->cursorHidden = TRUE;
+
+		xf_unlock_x11(xfc, FALSE);
+	}
+#endif
+}
+
+void xf_input_show_cursor(xfContext* xfc)
+{
+#ifdef WITH_XCURSOR
+	xf_lock_x11(xfc, FALSE);
+
+	if (xfc->cursorHidden)
+	{
+		if (xfc->window)
+		{
+			if (!xfc->pointer)
+				XUndefineCursor(xfc->display, xfc->window->handle);
+			else
+				XDefineCursor(xfc->display, xfc->window->handle, xfc->pointer->cursor);
+		}
+
+		xfc->cursorHidden = FALSE;
+	}
+
+	xf_unlock_x11(xfc, FALSE);
+#endif
+}
+
 int xf_input_touch_remote(xfContext* xfc, XIDeviceEvent* event, int evtype)
 {
 	int x, y;
@@ -561,6 +640,8 @@ int xf_input_touch_remote(xfContext* xfc, XIDeviceEvent* event, int evtype)
 	if (!rdpei)
 		return 0;
 	
+	xf_input_hide_cursor(xfc);
+
 	touchId = event->detail;
 	x = (int) event->event_x;
 	y = (int) event->event_y;
@@ -586,7 +667,8 @@ int xf_input_touch_remote(xfContext* xfc, XIDeviceEvent* event, int evtype)
 
 int xf_input_event(xfContext* xfc, XIDeviceEvent* event, int evtype)
 {
-	
+	xf_input_show_cursor(xfc);
+
 	switch (evtype)
 	{
 		case XI_ButtonPress:

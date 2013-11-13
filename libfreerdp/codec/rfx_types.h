@@ -26,6 +26,7 @@
 
 #include <winpr/crt.h>
 #include <winpr/pool.h>
+#include <winpr/wlog.h>
 #include <winpr/collections.h>
 
 #include <freerdp/utils/debug.h>
@@ -39,7 +40,8 @@
 
 struct _RFX_CONTEXT_PRIV
 {
-	wQueue* TilePool;
+	wLog* log;
+	wObjectPool* TilePool;
 
 	BOOL UseThreads;
 	DWORD MinThreadCount;

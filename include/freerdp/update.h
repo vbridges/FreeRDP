@@ -23,6 +23,7 @@
 typedef struct rdp_update rdpUpdate;
 
 #include <winpr/crt.h>
+#include <winpr/wlog.h>
 #include <winpr/synch.h>
 #include <winpr/thread.h>
 #include <winpr/stream.h>
@@ -134,6 +135,14 @@ enum SURFCMD_FRAMEACTION
 	SURFACECMD_FRAMEACTION_END = 0x0001
 };
 
+struct _SURFACE_FRAME
+{
+	UINT32 frameId;
+	UINT32 commandCount;
+	SURFACE_BITS_COMMAND* commands;
+};
+typedef struct _SURFACE_FRAME SURFACE_FRAME;
+
 /* defined inside libfreerdp-core */
 typedef struct rdp_update_proxy rdpUpdateProxy;
 
@@ -190,6 +199,8 @@ struct rdp_update
 	UINT32 paddingE[80 - 68]; /* 68 */
 
 	/* internal */
+
+	wLog* log;
 
 	BOOL dump_rfx;
 	BOOL play_rfx;

@@ -31,6 +31,10 @@ set(${MODULE_PREFIX}_SRCS
 
 include_directories(..)
 
+find_package(UDev REQUIRED)
+find_package(UUID REQUIRED)
+find_package(DbusGlib REQUIRED)
+
 add_channel_client_library(${MODULE_PREFIX} ${MODULE_NAME} ${CHANNEL_NAME} TRUE "DVCPluginEntry")
 
 set_target_properties(${MODULE_NAME} PROPERTIES PREFIX "")
@@ -38,9 +42,9 @@ set_target_properties(${MODULE_NAME} PROPERTIES PREFIX "")
 #set(${MODULE_PREFIX}_LIBS ${${MODULE_PREFIX}_LIBS} libusb-devman)
 
 set(${MODULE_PREFIX}_LIBS
-	dbus-glib-1
-	udev
-	uuid)
+    ${DBUS_GLIB_LIBRARIES}
+    ${UDEV_LIBRARIES}
+    ${UUID_LIBRARIES})
 
 set_complex_link_libraries(VARIABLE ${MODULE_PREFIX}_LIBS
 	MONOLITHIC ${MONOLITHIC_BUILD}
@@ -54,9 +58,7 @@ set_complex_link_libraries(VARIABLE ${MODULE_PREFIX}_LIBS
 
 target_link_libraries(${MODULE_NAME} ${${MODULE_PREFIX}_LIBS})
 
-if(NOT STATIC_CHANNELS)
-	install(TARGETS ${MODULE_NAME} DESTINATION ${FREERDP_PLUGIN_PATH})
-endif()
+install(TARGETS ${MODULE_NAME} DESTINATION ${FREERDP_ADDIN_PATH} EXPORT FreeRDPTargets)
 
 set_property(TARGET ${MODULE_NAME} PROPERTY FOLDER "Channels/${CHANNEL_NAME}/Client")
 

@@ -70,18 +70,23 @@ HANDLE CreateEventW(LPSECURITY_ATTRIBUTES lpEventAttributes, BOOL bManualReset, 
 		if (event->pipe_fd[0] < 0)
 		{
 			fprintf(stderr, "CreateEventW: failed to create event\n");
+			free(event);
 			return NULL;
 		}
 #else
 		if (pipe(event->pipe_fd) < 0)
 		{
 			fprintf(stderr, "CreateEventW: failed to create event\n");
+			free(event);
 			return NULL;
 		}
 #endif
 
 		WINPR_HANDLE_SET_TYPE(event, HANDLE_TYPE_EVENT);
 		handle = (HANDLE) event;
+
+		if (bInitialState)
+			SetEvent(handle);
 	}
 
 	if (!cs.LockSemaphore)

@@ -45,7 +45,7 @@ include(CheckCCompilerFlag)
 include(GNUInstallDirsWrapper)
 
 # Soname versioning
-set(WINPR_VERSION_MAJOR "0")
+set(WINPR_VERSION_MAJOR "1")
 set(WINPR_VERSION_MINOR "1")
 set(WINPR_VERSION_REVISION "0")
 set(WINPR_VERSION "${WINPR_VERSION_MAJOR}.${WINPR_VERSION_MINOR}")
@@ -63,11 +63,14 @@ endif()
 
 if(FREERDP_BUILD)
 	include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include PARENT_SCOPE)
+	include_directories(${CMAKE_CURRENT_BINARY_DIR}/include PARENT_SCOPE)
 else()
 	include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+	include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)
 endif()
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/winpr/config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/include/winpr/config.h)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/winpr/config.h.in 
+	${CMAKE_CURRENT_BINARY_DIR}/include/winpr/config.h)
 
 add_subdirectory(include)
 
@@ -76,3 +79,31 @@ add_subdirectory(libwinpr)
 if(NOT ANDROID AND NOT IOS)
 	add_subdirectory(tools)
 endif()
+
+# Exporting
+
+if(${CMAKE_VERSION} VERSION_GREATER "2.8.10")
+
+	export(PACKAGE winpr)
+
+	set(WINPR_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/WinPR")
+
+	set(WINPR_INCLUDE_DIR "include")
+	set(WINPR_MONOLITHIC_BUILD ${MONOLITHIC_BUILD})
+
+	message(STATUS "WINPR_VERSION: ${WINPR_VERSION}")
+
+	configure_package_config_file(WinPRConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/WinPRConfig.cmake
+		INSTALL_DESTINATION ${WINPR_CMAKE_INSTALL_DIR}
+		PATH_VARS WINPR_INCLUDE_DIR WINPR_MONOLITHIC_BUILD)
+
+	write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/WinPRConfigVersion.cmake
+		VERSION ${WINPR_VERSION} COMPATIBILITY SameMajorVersion)
+
+	install(FILES ${CMAKE_CURRENT_BINARY_DIR}/WinPRConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/WinPRConfigVersion.cmake
+		DESTINATION ${WINPR_CMAKE_INSTALL_DIR})
+
+	install(EXPORT WinPRTargets DESTINATION ${WINPR_CMAKE_INSTALL_DIR})
+
+endif()
+

@@ -12,6 +12,8 @@
 #import "TSXAdditions.h"
 
 #import <freerdp/input.h>
+#import <freerdp/version.h>
+
 #import "config.h"
 
 #include <sys/types.h>
