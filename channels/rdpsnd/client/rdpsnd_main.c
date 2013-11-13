@@ -39,6 +39,7 @@
 #include <winpr/stream.h>
 #include <winpr/cmdline.h>
 #include <winpr/sysinfo.h>
+#include <winpr/platform.h>
 #include <winpr/collections.h>
 
 #include <freerdp/types.h>
@@ -91,7 +92,6 @@ struct rdpsnd_plugin
 	rdpsndDevicePlugin* device;
 };
 
-static void rdpsnd_send_wave_confirm_pdu(rdpsndPlugin* rdpsnd, UINT16 wTimeStamp, BYTE cConfirmedBlockNo);
 
 static void* rdpsnd_schedule_thread(void* arg)
 {
@@ -463,7 +463,7 @@ static void rdpsnd_recv_wave_pdu(rdpsndPlugin* rdpsnd, wStream* s)
 		wave->wTimeStampB = rdpsnd->wTimeStamp + wave->wAudioLength + TIME_DELAY_MS;
 		wave->wLocalTimeB = wave->wLocalTimeA + wave->wAudioLength + TIME_DELAY_MS;
 	}
-	rdpsnd->device->WaveConfirm(rdpsnd->device, wave);
+	//rdpsnd->device->WaveConfirm(rdpsnd->device, wave);
 }
 
 static void rdpsnd_recv_close_pdu(rdpsndPlugin* rdpsnd)
@@ -679,7 +679,7 @@ static void rdpsnd_process_connect(rdpsndPlugin* rdpsnd)
 		rdpsnd_load_device_plugin(rdpsnd, rdpsnd->subsystem, args);
 	}
 
-#if defined(WITH_IOSAUDIO)
+#if defined(__IOS__)
 	if (!rdpsnd->device)
 	{
 		rdpsnd_set_subsystem(rdpsnd, "ios");

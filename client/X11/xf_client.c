@@ -102,44 +102,72 @@
 static long xv_port = 0;
 static const size_t password_size = 512;
 
+/*
+ * This function is called for setting the behavior of
+ *the window manager for the client. The handling
+ *of window sizing is cofigured here.
+ *
+ * If our screen is 100x100 and we apply a translation
+ *of 5px to the right, then we need a window to be
+ *105x100.
+ *
+ * If our screen is 100x100 and we apply a scaling of
+ *1.25, then we will need the window to be 125x125
+ *
+ */
 void xf_transform_window(xfContext* xfc)
 {
 	int ret;
-	int w;
-	int h;
+	int total_width;
+	int total_height;
 	long supplied;
 	Atom hints_atom;
 	XSizeHints* size_hints = NULL;
 
+	//if(xfc->settings->ParentWindowId)
+	//{
+		//printf("toolkit has control of window\n");
+	//}
+
+
 	hints_atom = XInternAtom(xfc->display, "WM_SIZE_HINTS", 1);
 
-	ret = XGetWMSizeHints(xfc->display, xfc->window->handle, size_hints, &supplied, hints_atom);
+	size_hints = XAllocSizeHints();
+	ret = XGetWMNormalHints(xfc->display, xfc->window->handle, size_hints, &supplied);
+	
 
-	if(ret == 0)
-		size_hints = XAllocSizeHints();
+	total_width = (xfc->originalWidth * xfc->settings->ScalingFactor) + xfc->offset_x;
+	total_height = (xfc->originalHeight * xfc->settings->ScalingFactor) + xfc->offset_y;
 
-	w = (xfc->originalWidth * xfc->settings->ScalingFactor) + xfc->offset_x;
-	h = (xfc->originalHeight * xfc->settings->ScalingFactor) + xfc->offset_y;
+	if(total_width < 1)
+		total_width = 1;
 
-	if(w < 1)
-		w = 1;
-
-	if(h < 1)
-		h = 1;
+	if(total_height < 1)
+		total_height = 1;
 
 	if (size_hints)
 	{
 		size_hints->flags |= PMinSize | PMaxSize;
-		size_hints->min_width = size_hints->max_width = w;
-		size_hints->min_height = size_hints->max_height = h;
+		size_hints->min_width = size_hints->max_width = total_width;
+		size_hints->min_height = size_hints->max_height = total_height;
 		XSetWMNormalHints(xfc->display, xfc->window->handle, size_hints);
-		XResizeWindow(xfc->display, xfc->window->handle, w, h);
+		//XSetWMSizeHints(xfc->display, xfc->window->handle, size_hints, hints_atom);
+		XResizeWindow(xfc->display, xfc->window->handle, total_width, total_height);
 
 		XFree(size_hints);
 	}
 }
 
-void xf_draw_screen_scaled(xfContext* xfc, int x, int y, int w, int h, BOOL scale)
+/*
+ * This function is a wrapper to XRender such that
+ *bitmaps can be drawn with an applied tranformation
+ *such as scaling or translation. This function is
+ *used similarly to XCopyArea
+ *
+ * If w or h are 0, the entire screen will be
+ *drawn (slow).
+ */
+void xf_draw_transformed_region(xfContext* xfc, int x, int y, int w, int h, BOOL scale)
 {
 #ifdef WITH_XRENDER
 	XTransform transform;
@@ -149,11 +177,13 @@ void xf_draw_screen_scaled(xfContext* xfc, int x, int y, int w, int h, BOOL scal
 	XRenderPictFormat* picFormat;
 	XRectangle xr;
 
+	//set up the pictures
 	picFormat = XRenderFindStandardFormat(xfc->display, PictStandardRGB24);
 	pa.subwindow_mode = IncludeInferiors;
 	primaryPicture = XRenderCreatePicture(xfc->display, xfc->primary, picFormat, CPSubwindowMode, &pa);
 	windowPicture = XRenderCreatePicture(xfc->display, xfc->window->handle, picFormat, CPSubwindowMode, &pa);
 
+	//set up the transformation matrix for scaling
 	transform.matrix[0][0] = XDoubleToFixed(1);
 	transform.matrix[0][1] = XDoubleToFixed(0);
 	transform.matrix[0][2] = XDoubleToFixed(0);
@@ -166,6 +196,12 @@ void xf_draw_screen_scaled(xfContext* xfc, int x, int y, int w, int h, BOOL scal
 	transform.matrix[2][1] = XDoubleToFixed(0);
 	transform.matrix[2][2] = XDoubleToFixed(xfc->settings->ScalingFactor);
 
+	/*
+	 * if we have a width and height for the region
+	 *then we set the clipping rectangle. Otherwise
+	 *without a clipping rectangle, the entire
+	 *primaryPicture will be drawn.
+	 */
 	if( (w != 0) && (h != 0) )
 	{
 
@@ -173,8 +209,8 @@ void xf_draw_screen_scaled(xfContext* xfc, int x, int y, int w, int h, BOOL scal
 		{
 			xr.x = x * xfc->settings->ScalingFactor;
 			xr.y = y * xfc->settings->ScalingFactor;
-			xr.width = (w+1) * xfc->settings->ScalingFactor;
-			xr.height = (h+1) * xfc->settings->ScalingFactor;
+			xr.width = w * xfc->settings->ScalingFactor + 1;
+			xr.height = h * xfc->settings->ScalingFactor + 1;
 		}
 		else
 		{
@@ -184,7 +220,24 @@ void xf_draw_screen_scaled(xfContext* xfc, int x, int y, int w, int h, BOOL scal
 			xr.height = h;
 		}
 
+
+
 		XRenderSetPictureClipRectangles(xfc->display, primaryPicture, 0, 0, &xr, 1);
+	}
+
+	switch(xfc->settings->RenderQuality)
+	{
+	case 0:
+		XRenderSetPictureFilter(xfc->display, primaryPicture, "fast", NULL, 0);
+		break;
+	case 1:
+		XRenderSetPictureFilter(xfc->display, primaryPicture, "good", NULL, 0);
+		break;
+	case 2:
+		XRenderSetPictureFilter(xfc->display, primaryPicture, "best", NULL, 0);
+		break;
+	default:
+		break;
 	}
 
 	XRenderSetPictureTransform(xfc->display, primaryPicture, &transform);
@@ -196,6 +249,24 @@ void xf_draw_screen_scaled(xfContext* xfc, int x, int y, int w, int h, BOOL scal
 
 #endif
 
+}
+
+void xf_scale_update(xfContext* xfc)
+{
+  int wdiff;
+
+  xfc->currentWidth = (int)(xfc->originalWidth * xfc->settings->ScalingFactor);
+  xfc->currentHeight = (int)(xfc->originalHeight * xfc->settings->ScalingFactor);
+
+  //check for floating point rounding error
+  wdiff = abs(xfc->currentWidth - xfc->originalWidth);
+  if( (wdiff) && (wdiff < 3) )
+    {
+      xfc->currentWidth = xfc->originalWidth;
+      xfc->currentHeight = xfc->originalHeight;
+
+      xfc->settings->ScalingFactor = 1.0;
+    } 
 }
 
 void xf_sw_begin_paint(rdpContext* context)
@@ -232,7 +303,7 @@ void xf_sw_end_paint(rdpContext* context)
 
 			if ( (xfc->settings->ScalingFactor != 1.0) || (xfc->offset_x) || (xfc->offset_y) )
 			{
-				xf_draw_screen_scaled(xfc, x, y, w, h, TRUE);
+				xf_draw_transformed_region(xfc, x, y, w, h, TRUE);
 			}
 			else
 			{
@@ -267,7 +338,7 @@ void xf_sw_end_paint(rdpContext* context)
 
 				if ( (xfc->settings->ScalingFactor != 1.0) || (xfc->offset_x) || (xfc->offset_y) )
 				{
-					xf_draw_screen_scaled(xfc, x, y, w, h, TRUE);
+					xf_draw_transformed_region(xfc, x, y, w, h, TRUE);
 				}
 				else
 				{
@@ -354,7 +425,7 @@ void xf_hw_end_paint(rdpContext* context)
 
 			if ( (xfc->settings->ScalingFactor != 1.0) || (xfc->offset_x) || (xfc->offset_y) )
 			{
-				xf_draw_screen_scaled(xfc, x, y, w, h, TRUE);
+				xf_draw_transformed_region(xfc, x, y, w, h, TRUE);
 			}
 			else
 			{
@@ -386,7 +457,7 @@ void xf_hw_end_paint(rdpContext* context)
 				
 				if ( (xfc->settings->ScalingFactor != 1.0) || (xfc->offset_x) || (xfc->offset_y) )
 				{
-					xf_draw_screen_scaled(xfc, x, y, w, h, TRUE);
+					xf_draw_transformed_region(xfc, x, y, w, h, TRUE);
 				}
 				else
 				{
@@ -1682,8 +1753,7 @@ void xf_ParamChangeEventHandler(rdpContext* context, ParamChangeEventArgs* e)
 	{
 	case FreeRDP_ScalingFactor:
 
-		xfc->currentWidth = xfc->originalWidth * xfc->settings->ScalingFactor;
-		xfc->currentHeight = xfc->originalHeight * xfc->settings->ScalingFactor;
+		xf_scale_update(xfc);
 
 		xf_transform_window(xfc);
 
@@ -1691,11 +1761,11 @@ void xf_ParamChangeEventHandler(rdpContext* context, ParamChangeEventArgs* e)
 			ResizeWindowEventArgs e;
 
 			EventArgsInit(&e, "xfreerdp");
-			e.width = (int) xfc->originalWidth * xfc->settings->ScalingFactor;
-			e.height = (int) xfc->originalHeight * xfc->settings->ScalingFactor;
+			e.width = xfc->currentWidth;
+			e.height = xfc->currentHeight;
 			PubSub_OnResizeWindow(((rdpContext*) xfc)->pubSub, xfc, &e);
 		}
-		xf_draw_screen_scaled(xfc, 0, 0, 0, 0, FALSE);
+		xf_draw_transformed_region(xfc, 0, 0, 0, 0, FALSE);
 
 		break;
 
@@ -1715,21 +1785,19 @@ static void xf_ScalingFactorChangeEventHandler(rdpContext* context, ScalingFacto
 	if (xfc->settings->ScalingFactor < 0.8)
 		xfc->settings->ScalingFactor = 0.8;
 
-
-	xfc->currentWidth = xfc->originalWidth * xfc->settings->ScalingFactor;
-	xfc->currentHeight = xfc->originalHeight * xfc->settings->ScalingFactor;
+	xf_scale_update(xfc);
 
 	xf_transform_window(xfc);
 
 	{
 		ResizeWindowEventArgs ev;
 
-		EventArgsInit(&ev, "xfreerdp");
-		ev.width = (int) xfc->originalWidth * xfc->settings->ScalingFactor;
-		ev.height = (int) xfc->originalHeight * xfc->settings->ScalingFactor;
-		PubSub_OnResizeWindow(((rdpContext*) xfc)->pubSub, xfc, &ev);
+		EventArgsInit(&e, "xfreerdp");
+		e.width = xfc->currentWidth;
+		e.height = xfc->currentHeight;		
+		PubSub_OnResizeWindow(((rdpContext*) xfc)->pubSub, xfc, &e);
 	}
-	xf_draw_screen_scaled(xfc, 0, 0, 0, 0, FALSE);
+	xf_draw_transformed_region(xfc, 0, 0, 0, 0, FALSE);
 
 }
 
@@ -1842,6 +1910,11 @@ static int xfreerdp_client_new(freerdp* instance, rdpContext* context)
 	settings->OrderSupport[NEG_POLYGON_CB_INDEX] = (settings->SoftwareGdi) ? FALSE : TRUE;
 	settings->OrderSupport[NEG_ELLIPSE_SC_INDEX] = FALSE;
 	settings->OrderSupport[NEG_ELLIPSE_CB_INDEX] = FALSE;
+
+	if(xfc->settings->PanByPix == 0)
+	  {
+		xfc->settings->PanByPix = 10;
+	  }
 
 	PubSub_SubscribeTerminate(context->pubSub, (pTerminateEventHandler) xf_TerminateEventHandler);
 	PubSub_SubscribeParamChange(context->pubSub, (pParamChangeEventHandler) xf_ParamChangeEventHandler);

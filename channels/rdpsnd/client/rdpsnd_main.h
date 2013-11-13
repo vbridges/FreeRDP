@@ -34,4 +34,6 @@
 
 int rdpsnd_virtual_channel_write(rdpsndPlugin* rdpsnd, wStream* s);
 
+void rdpsnd_send_wave_confirm_pdu(rdpsndPlugin* rdpsnd, UINT16 wTimeStamp, BYTE cConfirmedBlockNo);
+
 #endif /* __RDPSND_MAIN_H */

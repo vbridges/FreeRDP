@@ -25,7 +25,8 @@ FIND_LIBRARY(CORE_FOUNDATION CoreFoundation)
 
 set(${MODULE_PREFIX}_SRCS
 	rdpsnd_ios.c
-	TPCircularBuffer.c)
+	TPCircularBuffer.c
+	TPCircularBuffer.h)
 
 include_directories(..)
 

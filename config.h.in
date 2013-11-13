@@ -41,7 +41,6 @@
 #cmakedefine WITH_MACAUDIO
 #cmakedefine WITH_ALSA
 #cmakedefine WITH_PULSE
-#cmakedefine WITH_IOSAUDIO
 #cmakedefine WITH_OPENSLES
 
 /* Plugins */

@@ -66,16 +66,16 @@ int clock_gettime(int clk_id, struct timespec *t)
 	double seconds;
 	double nseconds;
 	mach_timebase_info_data_t timebase;
-
+	
 	mach_timebase_info(&timebase);
 	time = mach_absolute_time();
-
+	
 	nseconds = ((double) time * (double) timebase.numer) / ((double) timebase.denom);
 	seconds = ((double) time * (double) timebase.numer) / ((double) timebase.denom * 1e9);
-
+	
 	t->tv_sec = seconds;
 	t->tv_nsec = nseconds;
-
+	
 	return 0;
 }
 
@@ -87,31 +87,31 @@ int clock_gettime(int clk_id, struct timespec *t)
 #if !defined(HAVE_PTHREAD_GNU_EXT)
 #include <pthread.h>
 static int pthread_timedjoin_np(pthread_t td, void **res,
-		struct timespec *timeout)
+				struct timespec *timeout)
 {
 	struct timeval timenow;
 	struct timespec sleepytime;
 	/* This is just to avoid a completely busy wait */
 	sleepytime.tv_sec = 0;
 	sleepytime.tv_nsec = 10000000; /* 10ms */
-
+	
 	do
 	{
 		if (pthread_kill(td, 0))
 			return pthread_join(td, res);
-
+		
 		nanosleep(&sleepytime, NULL);
-  
+		
 		gettimeofday(&timenow, NULL);
-
+		
 		if (timenow.tv_sec >= timeout->tv_sec &&
-				(timenow.tv_usec * 1000) >= timeout->tv_nsec)
+		    (timenow.tv_usec * 1000) >= timeout->tv_nsec)
 		{
 			return ETIMEDOUT;
 		}
 	}
 	while (TRUE);
-
+	
 	return ETIMEDOUT;
 }
 
@@ -120,24 +120,24 @@ static int pthread_mutex_timedlock(pthread_mutex_t *mutex, const struct timespec
 	struct timeval timenow;
 	struct timespec sleepytime;
 	int retcode;
-
+	
 	/* This is just to avoid a completely busy wait */
 	sleepytime.tv_sec = 0;
 	sleepytime.tv_nsec = 10000000; /* 10ms */
-
+	
 	while ((retcode = pthread_mutex_trylock (mutex)) == EBUSY)
 	{
 		gettimeofday (&timenow, NULL);
-
+		
 		if (timenow.tv_sec >= timeout->tv_sec &&
-				(timenow.tv_usec * 1000) >= timeout->tv_nsec)
+		    (timenow.tv_usec * 1000) >= timeout->tv_nsec)
 		{
 			return ETIMEDOUT;
 		}
-
+		
 		nanosleep (&sleepytime, NULL);
 	}
-
+	
 	return retcode;
 }
 #endif
@@ -146,7 +146,7 @@ static void ts_add_ms(struct timespec *ts, DWORD dwMilliseconds)
 {
 	ts->tv_sec += dwMilliseconds / 1000L;
 	ts->tv_nsec += (dwMilliseconds % 1000L) * 1000000L;
-
+	
 	while(ts->tv_nsec >= 1000000000L)
 	{
 		ts->tv_sec ++;
@@ -158,48 +158,48 @@ DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds)
 {
 	ULONG Type;
 	PVOID Object;
-
+	
 	if (!winpr_Handle_GetInfo(hHandle, &Type, &Object))
 		return WAIT_FAILED;
-
+	
 	if (Type == HANDLE_TYPE_THREAD)
 	{
 		int status = 0;
 		WINPR_THREAD* thread;
 		void* thread_status = NULL;
-
+		
 		thread = (WINPR_THREAD*) Object;
-
+		
 		if (thread->started)
 		{
 #ifdef __linux__
 			if (dwMilliseconds != INFINITE)
 			{
 				struct timespec timeout;
-
+				
 				/* pthread_timedjoin_np returns ETIMEDOUT in case the timeout is 0,
 				 * so set it to the smallest value to get a proper return value. */
 				if (dwMilliseconds == 0)
 					dwMilliseconds ++;
-
+				
 				clock_gettime(CLOCK_REALTIME, &timeout);
 				ts_add_ms(&timeout, dwMilliseconds);
-
+				
 				status = pthread_timedjoin_np(thread->thread, &thread_status, &timeout);
-
+				
 				if (ETIMEDOUT == status)
 					return WAIT_TIMEOUT;
 			}
 			else
 #endif
 				status = pthread_join(thread->thread, &thread_status);
-
+			
 			if (status != 0)
 			{
 				fprintf(stderr, "WaitForSingleObject: pthread_join failure: [%d] %s\n",
-						status, strerror(status));
+					status, strerror(status));
 			}
-
+			
 			if (thread_status)
 				thread->dwExitCode = ((DWORD) (size_t) thread_status);
 		}
@@ -207,33 +207,33 @@ DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds)
 	else if (Type == HANDLE_TYPE_PROCESS)
 	{
 		WINPR_PROCESS* process;
-
+		
 		process = (WINPR_PROCESS*) Object;
-
+		
 		if (waitpid(process->pid, &(process->status), 0) != -1)
 		{
 			return WAIT_FAILED;
 		}
-
+		
 		process->dwExitCode = (DWORD) process->status;
 	}
 	else if (Type == HANDLE_TYPE_MUTEX)
 	{
 		WINPR_MUTEX* mutex;
-
+		
 		mutex = (WINPR_MUTEX*) Object;
-
+		
 #ifdef __linux__
 		if (dwMilliseconds != INFINITE)
 		{
 			int status;
 			struct timespec timeout;
-
+			
 			clock_gettime(CLOCK_REALTIME, &timeout);
-			ts_add_ms(&timeout, dwMilliseconds);	
-
+			ts_add_ms(&timeout, dwMilliseconds);
+			
 			status = pthread_mutex_timedlock(&mutex->mutex, &timeout);
-
+			
 			if (ETIMEDOUT == status)
 				return WAIT_TIMEOUT;
 		}
@@ -247,33 +247,33 @@ DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds)
 		fd_set rfds;
 		WINPR_EVENT* event;
 		struct timeval timeout;
-
+		
 		event = (WINPR_EVENT*) Object;
-
+		
 		FD_ZERO(&rfds);
 		FD_SET(event->pipe_fd[0], &rfds);
 		ZeroMemory(&timeout, sizeof(timeout));
-
+		
 		if ((dwMilliseconds != INFINITE) && (dwMilliseconds != 0))
 		{
 			timeout.tv_usec = dwMilliseconds * 1000;
 		}
-
+		
 		status = select(event->pipe_fd[0] + 1, &rfds, NULL, NULL,
 				(dwMilliseconds == INFINITE) ? NULL : &timeout);
-
+		
 		if (status < 0)
 			return WAIT_FAILED;
-
+		
 		if (status != 1)
 			return WAIT_TIMEOUT;
 	}
 	else if (Type == HANDLE_TYPE_SEMAPHORE)
 	{
 		WINPR_SEMAPHORE* semaphore;
-
+		
 		semaphore = (WINPR_SEMAPHORE*) Object;
-
+		
 #ifdef WINPR_PIPE_SEMAPHORE
 		if (semaphore->pipe_fd[0] != -1)
 		{
@@ -281,46 +281,46 @@ DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds)
 			int length;
 			fd_set rfds;
 			struct timeval timeout;
-
+			
 			FD_ZERO(&rfds);
 			FD_SET(semaphore->pipe_fd[0], &rfds);
 			ZeroMemory(&timeout, sizeof(timeout));
-
+			
 			if ((dwMilliseconds != INFINITE) && (dwMilliseconds != 0))
 			{
 				timeout.tv_usec = dwMilliseconds * 1000;
 			}
-
+			
 			status = select(semaphore->pipe_fd[0] + 1, &rfds, 0, 0,
 					(dwMilliseconds == INFINITE) ? NULL : &timeout);
-
+			
 			if (status < 0)
 				return WAIT_FAILED;
-
+			
 			if (status != 1)
 				return WAIT_TIMEOUT;
-
+			
 			length = read(semaphore->pipe_fd[0], &length, 1);
-
+			
 			if (length != 1)
 				return WAIT_FAILED;
 		}
 #else
-
+		
 #if defined __APPLE__
 		semaphore_wait(*((winpr_sem_t*) semaphore->sem));
 #else
 		sem_wait((winpr_sem_t*) semaphore->sem);
 #endif
-
+		
 #endif
 	}
 	else if (Type == HANDLE_TYPE_TIMER)
 	{
 		WINPR_TIMER* timer;
-
+		
 		timer = (WINPR_TIMER*) Object;
-
+		
 #ifdef HAVE_EVENTFD_H
 		if (timer->fd != -1)
 		{
@@ -328,27 +328,27 @@ DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds)
 			fd_set rfds;
 			UINT64 expirations;
 			struct timeval timeout;
-
+			
 			FD_ZERO(&rfds);
 			FD_SET(timer->fd, &rfds);
 			ZeroMemory(&timeout, sizeof(timeout));
-
+			
 			if ((dwMilliseconds != INFINITE) && (dwMilliseconds != 0))
 			{
 				timeout.tv_usec = dwMilliseconds * 1000;
 			}
-
+			
 			status = select(timer->fd + 1, &rfds, 0, 0,
 					(dwMilliseconds == INFINITE) ? NULL : &timeout);
-
+			
 			if (status < 0)
 				return WAIT_FAILED;
-
+			
 			if (status != 1)
 				return WAIT_TIMEOUT;
-
+			
 			status = read(timer->fd, (void*) &expirations, sizeof(UINT64));
-
+			
 			if (status != 8)
 				return WAIT_TIMEOUT;
 		}
@@ -367,27 +367,27 @@ DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds)
 		fd_set rfds;
 		struct timeval timeout;
 		WINPR_NAMED_PIPE* pipe = (WINPR_NAMED_PIPE*) Object;
-
+		
 		fd = (pipe->ServerMode) ? pipe->serverfd : pipe->clientfd;
-
+		
 		if (fd == -1)
 			return WAIT_FAILED;
-
+		
 		FD_ZERO(&rfds);
 		FD_SET(fd, &rfds);
 		ZeroMemory(&timeout, sizeof(timeout));
-
+		
 		if ((dwMilliseconds != INFINITE) && (dwMilliseconds != 0))
 		{
 			timeout.tv_usec = dwMilliseconds * 1000;
 		}
-
+		
 		status = select(fd + 1, &rfds, NULL, NULL,
 				(dwMilliseconds == INFINITE) ? NULL : &timeout);
-
+		
 		if (status < 0)
 			return WAIT_FAILED;
-
+		
 		if (status != 1)
 			return WAIT_TIMEOUT;
 	}
@@ -395,7 +395,7 @@ DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds)
 	{
 		fprintf(stderr, "WaitForSingleObject: unknown handle type %lu\n", Type);
 	}
-
+	
 	return WAIT_OBJECT_0;
 }
 
@@ -416,25 +416,25 @@ DWORD WaitForMultipleObjects(DWORD nCount, const HANDLE* lpHandles, BOOL bWaitAl
 	ULONG Type;
 	PVOID Object;
 	struct timeval timeout;
-
+	
 	if (!nCount)
 		return WAIT_FAILED;
-
+	
 	maxfd = 0;
 	FD_ZERO(&fds);
 	ZeroMemory(&timeout, sizeof(timeout));
-
+	
 	if (bWaitAll)
 	{
 		fprintf(stderr, "WaitForMultipleObjects: bWaitAll not yet implemented\n");
 		assert(0);
 	}
-
+	
 	for (index = 0; index < nCount; index++)
 	{
 		if (!winpr_Handle_GetInfo(lpHandles[index], &Type, &Object))
 			return WAIT_FAILED;
-
+		
 		if (Type == HANDLE_TYPE_EVENT)
 		{
 			fd = ((WINPR_EVENT*) Object)->pipe_fd[0];
@@ -456,7 +456,7 @@ DWORD WaitForMultipleObjects(DWORD nCount, const HANDLE* lpHandles, BOOL bWaitAl
 		{
 			WINPR_NAMED_PIPE* pipe = (WINPR_NAMED_PIPE*) Object;
 			fd = (pipe->ServerMode) ? pipe->serverfd : pipe->clientfd;
-
+			
 			if (fd == -1)
 				return WAIT_FAILED;
 		}
@@ -464,34 +464,34 @@ DWORD WaitForMultipleObjects(DWORD nCount, const HANDLE* lpHandles, BOOL bWaitAl
 		{
 			return WAIT_FAILED;
 		}
-
+		
 		if (fd == -1)
 			return WAIT_FAILED;
-
+		
 		FD_SET(fd, &fds);
-
+		
 		if (fd > maxfd)
 			maxfd = fd;
 	}
-
+	
 	if ((dwMilliseconds != INFINITE) && (dwMilliseconds != 0))
 	{
 		timeout.tv_usec = dwMilliseconds * 1000;
 	}
-
+	
 	status = select(maxfd + 1, &fds, 0, 0,
 			(dwMilliseconds == INFINITE) ? NULL : &timeout);
-
+	
 	if (status < 0)
 		return WAIT_FAILED;
-
+	
 	if (status == 0)
 		return WAIT_TIMEOUT;
-
+	
 	for (index = 0; index < nCount; index++)
 	{
 		winpr_Handle_GetInfo(lpHandles[index], &Type, &Object);
-
+		
 		if (Type == HANDLE_TYPE_EVENT)
 		{
 			fd = ((WINPR_EVENT*) Object)->pipe_fd[0];
@@ -510,15 +510,15 @@ DWORD WaitForMultipleObjects(DWORD nCount, const HANDLE* lpHandles, BOOL bWaitAl
 			WINPR_NAMED_PIPE* pipe = (WINPR_NAMED_PIPE*) Object;
 			fd = (pipe->ServerMode) ? pipe->serverfd : pipe->clientfd;
 		}
-
+		
 		if (FD_ISSET(fd, &fds))
 		{
 			if (Type == HANDLE_TYPE_SEMAPHORE)
 			{
 				int length;
-
+				
 				length = read(fd, &length, 1);
-
+				
 				if (length != 1)
 					return WAIT_FAILED;
 			}
@@ -526,17 +526,17 @@ DWORD WaitForMultipleObjects(DWORD nCount, const HANDLE* lpHandles, BOOL bWaitAl
 			{
 				int length;
 				UINT64 expirations;
-
+				
 				length = read(fd, (void*) &expirations, sizeof(UINT64));
-
+				
 				if (length != 8)
 					return WAIT_FAILED;
 			}
-
+			
 			return (WAIT_OBJECT_0 + index);
 		}
 	}
-
+	
 	return WAIT_FAILED;
 }
 
